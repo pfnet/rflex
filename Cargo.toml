@@ -1,0 +1,10 @@
+[package]
+name = "rflex"
+version = "0.1.0"
+authors = ["Shuzo Kashihara <kashihara@preferred.jp>"]
+license = "MIT License"
+edition = "2018"
+
+[dependencies]
+fixedbitset = "0.1.9"
+liquid = "0.17"
