@@ -2,6 +2,10 @@
 
 rflex is a fast lexical analyzer generator for Rust.
 
+```
+cargo install rflex
+```
+
 See [tutorial.md](docs/tutorial.md).
 
 ## Unsupported regular-expression
