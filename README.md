@@ -9,6 +9,34 @@ rflex is a fast lexical analyzer generator for Rust.
 cargo install rflex
 ```
 
+or
+
+Write your Cargo.toml and build.rs
+
+```toml
+[package]
+# ...
+build = "build.rs"
+
+[build-dependencies]
+# ...
+rflex = "0.2"
+```
+
+```rust
+extern crate rflex;
+use std::path::Path;
+
+fn main() {
+    let path = Path::new("src").join("target.l");
+    let path = path.to_str().unwrap().to_string();
+    if let Err(e) = rflex::process(path) {
+        eprintln!("{}", e);
+        std::process::exit(1);
+    }
+}
+```
+
 See [tutorial.md](docs/tutorial.md).
 
 ## Unsupported regular-expression
