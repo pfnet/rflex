@@ -2,6 +2,9 @@
 
 rflex is a fast lexical analyzer generator for Rust.
 
+[![GitHub license](https://img.shields.io/github/license/pfnet/rflex.svg)](https://github.com/pfnet/rflex)
+[![Crates Status](https://img.shields.io/crates/v/rflex.svg)](https://crates.io/crates/rflex)
+
 ```
 cargo install rflex
 ```
