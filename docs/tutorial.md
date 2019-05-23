@@ -21,12 +21,13 @@ Second one means the end of the rules.
 %class Lexer
 %result_type i32
 abc      println!("match abc rule"); return Ok(0i32);
-[a-z]+   println!("'{}'", self.yytext()); return Ok(10i32);
+[a-z]+   println!("'{}'", self.yytext());
+         return Ok(10i32); /* action can be defined in multiple lines that starts with white space */
 " "      /* Skip white space. This comment cannot be omitted. */
 %%
 ```
 
-The rule contains `pattern` and `action` in the **one** line.
+The rule contains `pattern` and `action` in the lines.
 `Pattern` is a regular-expression sequences.
 `Action` is a Rust code block to execute when the pattern accepted.
 In the above example, `abc` is pattern, `println!("match abc rule"); return Ok(0i32);` is action.
