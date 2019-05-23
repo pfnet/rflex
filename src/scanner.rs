@@ -113,6 +113,7 @@ impl<R: BufRead> Scanner<R> {
         Ok(())
     }
     fn parse_rules(&mut self) -> Result<(), &str> {
+        let mut continue_action = false;
         loop {
             let mut line = String::new();
             let res = self.input.read_line(&mut line);
@@ -120,11 +121,17 @@ impl<R: BufRead> Scanner<R> {
                 Ok(0) => return Err("reached end of file"),
                 Ok(_) => {
                     self.line_num += 1;
+                    if (line.starts_with(' ') || line.starts_with('\t')) && continue_action {
+                        self.actions.last_mut().unwrap().content.push_str(format!("\n{}", line.trim_end()).as_ref());
+                        continue;
+                    }
+
                     let trimed_line = line.trim();
                     if trimed_line == "%%" {
                         break;
                     }
                     if trimed_line.is_empty() {
+                        continue_action = false;
                         continue;
                     }
                     if trimed_line.chars().next().unwrap() == '%' {
@@ -146,16 +153,17 @@ impl<R: BufRead> Scanner<R> {
                                 self.keys.insert(key.to_string(), value.to_string());
                             }
                         }
+                        continue_action = false;
                         continue;
                     }
 
-                    // TODO: consider multi-line code block
                     let parse = parse_regex2(self.line_num, &mut trimed_line.to_string(), &mut self.char_classes);
                     match parse {
                         Ok((rule, action, state)) => {
                             self.rules.push(rule.clone());
                             self.actions.push(Action { content: action, num: 0i32, eof: rule.kind == IRKind::EOF, state: state.clone() });
                             self.lex_states.push(state);
+                            continue_action = true;
                         }
                         Err(msg) => {
                             eprintln!("parse error: {} at {} line", msg, self.line_num);
@@ -727,6 +735,7 @@ impl Translator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::BufReader;
 
     macro_rules! parse_ok {
         ($t:expr) => {{
@@ -793,6 +802,26 @@ mod tests {
                 }
             }
         }};
+    }
+
+    #[test]
+    fn scan_multiple_line_action() {
+        let s = r#"%%
+[a-z]  if true {
+       } else { }
+
+ new_rule  fuga
+
+[b-z]  hoge
+%%
+"#;
+        let mut reader = BufReader::new(s.as_bytes());
+        let mut scanner = Scanner::new(&mut reader);
+        assert!(scanner.scan().is_ok());
+        assert_eq!(scanner.actions.len(), 3);
+        assert_eq!(scanner.actions[0].content, "if true {\n       } else { }");
+        assert_eq!(scanner.actions[1].content, "fuga");
+        assert_eq!(scanner.actions[2].content, "hoge");
     }
 
     #[test]
