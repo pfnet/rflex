@@ -234,23 +234,29 @@ impl Lexer {
                     Lexer::ZZ_ACTION[zz_action as usize]
                 };
                 match action {
-                    1 => { println!("skip nl"); self.yybegin(Lexer::HOGE); }
+                    1 => { println!("skip nl");
+                 self.yybegin(Lexer::HOGE); }
                     10 => { /* nothing */ }
-                    2 => { println!("'{}'", self.yytext()); return Ok(10i32); }
+                    2 => { println!("'{}'", self.yytext());
+                 return Ok(10i32); }
                     11 => { /* nothing */ }
                     3 => { println!("skip ws"); }
                     12 => { /* nothing */ }
-                    4 => { println!("'{}'", self.yytext()); return Ok(10i32); }
+                    4 => { println!("'{}'", self.yytext());
+                 return Ok(10i32); }
                     13 => { /* nothing */ }
                     5 => { println!("HOGE skip nl"); }
                     14 => { /* nothing */ }
-                    6 => { println!("HOGE '{}'", self.yytext()); return Ok(100i32); }
+                    6 => { println!("HOGE '{}'", self.yytext());
+                 return Ok(100i32); }
                     15 => { /* nothing */ }
                     7 => { println!("HOGE skip ws"); }
                     16 => { /* nothing */ }
-                    8 => { println!("'{}'", self.yytext()); return Ok(10i32); }
+                    8 => { println!("'{}'", self.yytext());
+                 return Ok(10i32); }
                     17 => { /* nothing */ }
-                    9 => { println!("'{}'", self.yytext()); return Ok(1i32); }
+                    9 => { println!("'{}'", self.yytext());
+                 return Ok(1i32); }
                     18 => { /* nothing */ }
 
                     _ => {
