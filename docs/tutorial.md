@@ -113,7 +113,7 @@ rflex has a `%field` directive to append any fields to lexer struct.
 That makes Lexer struct have `space_counter` field and generated impl is below:
 
 ```rust
-pub fn new(input: String, space_counter: SpaceCounter) -> Lexer { /* omission */ }
+pub fn new(input: &'a str, space_counter: SpaceCounter) -> Lexer<'a> { /* omission */ }
 pub fn get_space_counter(&mut self) -> &mut SpaceCounter { &mut self.space_counter } 
 
 ```
