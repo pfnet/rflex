@@ -279,11 +279,10 @@ pub enum Error {
     Unmatch,
 }
 
-pub struct {{lexer_name}} {
-    input: String,
+pub struct {{lexer_name}}<'a> {
     cmap: Vec<usize>,
-    start: std::str::Chars<'static>,
-    current: std::str::Chars<'static>,
+    start: std::str::Chars<'a>,
+    current: std::str::Chars<'a>,
     max_len: usize,
 {{ previous_def }}
 
@@ -297,7 +296,7 @@ pub struct {{lexer_name}} {
 {{ fields_def }}
 }
 
-impl {{lexer_name}} {
+impl<'a> {{lexer_name}}<'a> {
     pub const ZZ_ROW: [usize; {{row_num}}] = {{row_value}};
     pub const ZZ_TRANS: [i32; {{trans_num}}] = {{trans_value}};
     pub const ZZ_ATTR: [i32; {{attr_num}}] = {{attr_value}};
@@ -307,15 +306,14 @@ impl {{lexer_name}} {
 
     pub const YYEOF: i32 = -1;
 
-    pub fn new(input: String{{ fields_args }}) -> {{lexer_name}} {
-        let max_len = input.chars().count();
-        let chars: std::str::Chars = unsafe { std::mem::transmute(input.chars()) };
+    pub fn new(input: &'a str{{ fields_args }}) -> {{lexer_name}}<'a> {
+        let max_len = input.chars().clone().count();
+        let chars = input.chars();
         let mut cmap: Vec<usize> = Vec::with_capacity(0x110000);
         cmap.resize(0x110000, 0);
 {{cmap_values}}
 
         {{lexer_name}} {
-            input,
             cmap,
             start: chars.clone(),
             current: chars.clone(),

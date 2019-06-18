@@ -1173,8 +1173,8 @@ rankdir = LR
 
     #[test]
     fn lexer_1() {
-        let s = "abcdef".to_string();
-        let mut l = Lexer::new(s);
+        let s = "abcdef";
+        let mut l = Lexer::new(&s);
 
         assert_eq!(Ok(1i32), l.next_token());
         assert_eq!(Ok(2i32), l.next_token());
@@ -1184,8 +1184,8 @@ rankdir = LR
 
     #[test]
     fn lexer_2() {
-        let s = "abcUNMATCH".to_string();
-        let mut l = Lexer::new(s);
+        let s = "abcUNMATCH";
+        let mut l = Lexer::new(&s);
 
         assert_eq!(Ok(1i32), l.next_token());
         assert_eq!(Err(LexerError::Unmatch), l.next_token());
@@ -1196,11 +1196,10 @@ rankdir = LR
         EOF,
         Unmatch,
     }
-    struct Lexer {
-        input: String,
+    struct Lexer<'a> {
         cmap: Vec<usize>,
-        start: Chars<'static>,
-        current: Chars<'static>,
+        start: Chars<'a>,
+        current: Chars<'a>,
         max_len: usize,
 
         zz_state: usize,
@@ -1211,7 +1210,7 @@ rankdir = LR
         zz_at_eof: bool,
     }
 
-    impl Lexer {
+    impl<'a> Lexer<'a> {
         pub const ZZ_ROW: [usize; 8] = [0, 0, 7, 14, 21, 28, 35, 35];
         pub const ZZ_LEXSTATE: [i32; 2] = [0, 0];
         pub const ZZ_TRANS: [i32; 42] = [-1, 2, -1, -1, 3, -1, -1, -1, -1, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, 5, -1, -1, -1, -1, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, 7, -1, -1, -1, -1, -1, -1, -1];
@@ -1220,10 +1219,10 @@ rankdir = LR
         pub const YYINITIAL: usize = 0;
         pub const YYEOF: i32 = -1;
 
-        pub fn new(input: String) -> Lexer {
+        pub fn new(input: &'a str) -> Lexer<'a> {
             use std::mem;
-            let max_len = input.chars().count();
-            let chars: Chars = unsafe { mem::transmute(input.chars()) };
+            let max_len = input.chars().clone().count();
+            let chars = input.chars();
             let mut cmap: Vec<usize> = Vec::with_capacity(0x110000);
             cmap.resize(0x110000, 0);
             // cmap - "abcdef"
@@ -1234,7 +1233,6 @@ rankdir = LR
             cmap[101] = 5;
             cmap[102] = 6;
             Lexer {
-                input,
                 cmap,
                 start: chars.clone(),
                 current: chars.clone(),

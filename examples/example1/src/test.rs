@@ -24,11 +24,10 @@ pub enum Error {
     Unmatch,
 }
 
-pub struct Lexer {
-    input: String,
+pub struct Lexer<'a> {
     cmap: Vec<usize>,
-    start: std::str::Chars<'static>,
-    current: std::str::Chars<'static>,
+    start: std::str::Chars<'a>,
+    current: std::str::Chars<'a>,
     max_len: usize,
 
 
@@ -43,7 +42,7 @@ pub struct Lexer {
     space_counter: SpaceCounter,
 }
 
-impl Lexer {
+impl<'a> Lexer<'a> {
     pub const ZZ_ROW: [usize; 6] = [0, 7, 14, 21, 28, 14];
     pub const ZZ_TRANS: [i32; 35] = [-1, 1, 2, 2, 2, -1, 3, -1, 2, 4, 2, 2, 2, -1, -1, 2, 2, 2, 2, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, 2, 2, 5, 2, 2, -1];
     pub const ZZ_ATTR: [i32; 6] = [0, 1, 1, 9, 1, 1];
@@ -54,9 +53,9 @@ impl Lexer {
 
     pub const YYEOF: i32 = -1;
 
-    pub fn new(input: String, space_counter: SpaceCounter) -> Lexer {
-        let max_len = input.chars().count();
-        let chars: std::str::Chars = unsafe { std::mem::transmute(input.chars()) };
+    pub fn new(input: &'a str, space_counter: SpaceCounter) -> Lexer<'a> {
+        let max_len = input.chars().clone().count();
+        let chars = input.chars();
         let mut cmap: Vec<usize> = Vec::with_capacity(0x110000);
         cmap.resize(0x110000, 0);
         cmap[32] = 6;
@@ -116,7 +115,6 @@ impl Lexer {
 
 
         Lexer {
-            input,
             cmap,
             start: chars.clone(),
             current: chars.clone(),
