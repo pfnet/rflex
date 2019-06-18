@@ -1,8 +1,8 @@
 pub mod test;
 fn main() {
-    let s = "abc a A ABC abC_def".to_string();
+    let s = "abc a A ABC abC_def";
     //let s = "abc !".to_string();  // match unmatch
-    let mut lex = test::Lexer::new(s, test::SpaceCounter::new());
+    let mut lex = test::Lexer::new(&s, test::SpaceCounter::new());
     loop {
         let res = lex.yylex();
         println!("{:?}", res);
