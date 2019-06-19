@@ -1220,7 +1220,6 @@ rankdir = LR
         pub const YYEOF: i32 = -1;
 
         pub fn new(input: &'a str) -> Lexer<'a> {
-            use std::mem;
             let max_len = input.chars().clone().count();
             let chars = input.chars();
             let mut cmap: Vec<usize> = Vec::with_capacity(0x110000);
