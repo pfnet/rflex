@@ -20,7 +20,7 @@ build = "build.rs"
 
 [build-dependencies]
 # ...
-rflex = "0.3"
+rflex = "0.4"
 ```
 
 ```rust
