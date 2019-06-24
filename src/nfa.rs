@@ -1,16 +1,17 @@
-use std::rc::Rc;
+extern crate fixedbitset;
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::rc::Rc;
 
-use crate::scanner::{Action, IR, IRKind};
-use crate::dfa::DFA;
-
-extern crate fixedbitset;
-use self::fixedbitset::FixedBitSet;
-use crate::charclasses::Interval;
 use crate::charclasses::CharClasses;
+use crate::charclasses::Interval;
+use crate::dfa::DFA;
 use crate::scanner::RepetitionKind;
+use crate::scanner::{Action, IRKind, IR};
+
+use self::fixedbitset::FixedBitSet;
 
 pub type IntPair = (usize, usize);
 
@@ -31,7 +32,7 @@ pub struct NFA {
 
 impl NFA {
     pub fn new() -> NFA {
-        NFA::new_with_lex(1, 256, CharClasses::new(127))  // temp value
+        NFA::new_with_lex(1, 256, CharClasses::new(127)) // temp value
     }
 
     /// Create NFA with lex arguments
@@ -147,7 +148,8 @@ impl NFA {
                 let start = nfa1.1 + 1;
                 let end = nfa1.1 + 2;
                 match rep.kind {
-                    RepetitionKind::ZeroOrMore => { // '*'
+                    RepetitionKind::ZeroOrMore => {
+                        // '*'
                         self.add_epsilon_transition(nfa1.1, end);
                         self.add_epsilon_transition(start, nfa1.0);
 
@@ -155,18 +157,20 @@ impl NFA {
                         self.add_epsilon_transition(nfa1.1, nfa1.0);
 
                         return (start, end);
-                    },
-                    RepetitionKind::OneOrMore => {  // '+'
+                    }
+                    RepetitionKind::OneOrMore => {
+                        // '+'
                         self.add_epsilon_transition(nfa1.1, end);
                         self.add_epsilon_transition(start, nfa1.0);
 
                         self.add_epsilon_transition(nfa1.1, nfa1.0);
                         return (start, end);
-                    },
-                    RepetitionKind::ZeroOrOne => {  // '?'
+                    }
+                    RepetitionKind::ZeroOrOne => {
+                        // '?'
                         self.add_epsilon_transition(nfa1.0, nfa1.1);
                         return (nfa1.0, nfa1.1);
-                    },
+                    }
                 }
             }
             IRKind::BOL(ir) | IRKind::Group(ir) => {
@@ -203,14 +207,18 @@ impl NFA {
     }
 
     fn insert_char_class(&mut self, intervals: Vec<Interval>, start: usize, end: usize) {
-        let codes = self.char_classes.get_class_codes_from_interval(intervals, false);
+        let codes = self
+            .char_classes
+            .get_class_codes_from_interval(intervals, false);
         for c in codes {
             self.add_transition(start, c, end)
         }
     }
 
     fn insert_not_char_class(&mut self, intervals: Vec<Interval>, start: usize, end: usize) {
-        let codes = self.char_classes.get_class_codes_from_interval(intervals, true);
+        let codes = self
+            .char_classes
+            .get_class_codes_from_interval(intervals, true);
         for c in codes {
             self.add_transition(start, c, end)
         }
@@ -227,7 +235,7 @@ impl NFA {
         if let Some(set) = self.table[start][input].clone() {
             set.borrow_mut().put(dest);
         } else {
-            let mut set =  FixedBitSet::with_capacity(self.est_size);
+            let mut set = FixedBitSet::with_capacity(self.est_size);
             set.put(dest);
             self.table[start][input] = Some(Rc::new(RefCell::new(set)));
         }
@@ -245,7 +253,7 @@ impl NFA {
         if let Some(set) = self.epsilon[start].clone() {
             set.borrow_mut().put(dest);
         } else {
-            let mut set =  FixedBitSet::with_capacity(self.est_size);
+            let mut set = FixedBitSet::with_capacity(self.est_size);
             set.put(dest);
             self.epsilon[start] = Some(Rc::new(RefCell::new(set)));
         }
@@ -267,7 +275,7 @@ impl NFA {
         table_empty.resize(self.num_input, None);
         new_epsilon.resize(new_states_len, None);
         new_table.resize(new_states_len, table_empty);
-        new_action_.resize(new_states_len, Action::new() );
+        new_action_.resize(new_states_len, Action::new());
         new_is_final.resize(new_states_len, false);
         for i in 0..old_len {
             new_epsilon[i] = self.epsilon[i].clone();
@@ -292,7 +300,10 @@ impl NFA {
         }
 
         let look = self.insert_nfa(ir);
-        let is_bol = match ir.kind { IRKind::BOL(_) => true, _ => false };
+        let is_bol = match ir.kind {
+            IRKind::BOL(_) => true,
+            _ => false,
+        };
 
         if !is_bol {
             self.add_epsilon_transition(2 * num_state, look.0);
@@ -331,7 +342,10 @@ impl NFA {
 
             dfa.set_entry_state(i, num_dfa_states as i32);
 
-            dfa.set_final(num_dfa_states, self.contains_final(Rc::new(RefCell::new(new_state.clone()))));
+            dfa.set_final(
+                num_dfa_states,
+                self.contains_final(Rc::new(RefCell::new(new_state.clone()))),
+            );
             dfa.set_action(num_dfa_states, self.get_action(&new_state));
 
             num_dfa_states += 1;
@@ -347,7 +361,6 @@ impl NFA {
         }
         println!(" ");
         */
-
 
         let mut tmp_set: FixedBitSet = FixedBitSet::with_capacity(self.num_states);
 
@@ -418,7 +431,10 @@ impl NFA {
 
                         dfa.add_transition(current_dfa_state, input, num_dfa_states);
                         dfa.set_action(num_dfa_states, self.get_action(&store_state));
-                        dfa.set_final(num_dfa_states, self.contains_final(Rc::new(RefCell::new(store_state))));
+                        dfa.set_final(
+                            num_dfa_states,
+                            self.contains_final(Rc::new(RefCell::new(store_state))),
+                        );
                     }
                 } // TODO: report progress
             }
@@ -495,7 +511,7 @@ impl NFA {
                     }
                 }
                 for i in epsilon_state.borrow().ones() {
-                    closure.put(i, );
+                    closure.put(i);
                 }
             }
         }

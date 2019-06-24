@@ -1,8 +1,10 @@
 extern crate liquid;
+
+use std::collections::HashMap;
+
+use crate::charclasses::CharClasses;
 use crate::dfa::DFA;
 use crate::scanner::Action;
-use crate::charclasses::CharClasses;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Emitter<'a> {
@@ -125,7 +127,10 @@ impl<'a> Emitter<'a> {
 
     /// state to row index in the transition table
     pub fn get_row_map(&self) -> Vec<i32> {
-        self.row_map.iter().map(|&x| x * self.num_cols).collect::<Vec<i32>>()
+        self.row_map
+            .iter()
+            .map(|&x| x * self.num_cols)
+            .collect::<Vec<i32>>()
     }
 
     pub fn get_col_map(&self) -> Vec<i32> {
@@ -169,13 +174,21 @@ impl<'a> Emitter<'a> {
         let mut value = 0;
         let mut table: Vec<i32> = vec![];
 
-        if self.dfa.is_final[0] { value = Emitter::FINAL; }
-        if !self.is_transition[0] { value |= Emitter::NOLOOK; }
+        if self.dfa.is_final[0] {
+            value = Emitter::FINAL;
+        }
+        if !self.is_transition[0] {
+            value |= Emitter::NOLOOK;
+        }
 
         for i in 1..self.dfa.num_states {
             let mut attribute = 0i32;
-            if self.dfa.is_final[i] { attribute = Emitter::FINAL; }
-            if !self.is_transition[i] { attribute |= Emitter::NOLOOK; }
+            if self.dfa.is_final[i] {
+                attribute = Emitter::FINAL;
+            }
+            if !self.is_transition[i] {
+                attribute |= Emitter::NOLOOK;
+            }
             if value == attribute {
                 count += 1;
             } else {
@@ -260,7 +273,11 @@ pub struct CodeGen<'a> {
 }
 
 impl<'a> CodeGen<'a> {
-    pub fn new(emitter: &'a mut Emitter<'a>, char_classes: CharClasses, lex_state: Vec<String>) -> CodeGen<'a> {
+    pub fn new(
+        emitter: &'a mut Emitter<'a>,
+        char_classes: CharClasses,
+        lex_state: Vec<String>,
+    ) -> CodeGen<'a> {
         CodeGen {
             emitter,
             char_classes,
@@ -269,10 +286,17 @@ impl<'a> CodeGen<'a> {
         }
     }
 
-    pub fn generate(&mut self, keys: &HashMap<String, String>, fields: &Vec<(String, String)>, eof_actions: &Vec<Action>, user_code: Vec<String>) -> String {
+    pub fn generate(
+        &mut self,
+        keys: &HashMap<String, String>,
+        fields: &Vec<(String, String)>,
+        eof_actions: &Vec<Action>,
+        user_code: Vec<String>,
+    ) -> String {
         self.emitter.emit();
 
-        let template = liquid::ParserBuilder::with_liquid().build().parse(r#"
+        let template = liquid::ParserBuilder::with_liquid().build().parse(
+            r#"
 #[derive(Debug)]
 pub enum Error {
     EOF,
@@ -452,7 +476,8 @@ impl<'a> {{lexer_name}}<'a> {
         // never reach end of function
     }
 {{ user_code }}
-}"#); // end template
+}"#,
+        ); // end template
         if template.is_err() {
             return template.err().unwrap().to_string();
         }
@@ -468,13 +493,31 @@ impl<'a> {{lexer_name}}<'a> {
                 fields_def.push_str(format!("\n    {}: {},", init, def_type).as_ref());
                 fields_args.push_str(format!(", {}: {}", init, def_type).as_ref());
                 fields_init.push_str(format!("\n            {},", init).as_ref());
-                fields_accessor.push_str(format!("        pub fn get_{}(&mut self) -> &mut {} {{ &mut self.{} }}\n", init, def_type, init).as_ref());
+                fields_accessor.push_str(
+                    format!(
+                        "        pub fn get_{}(&mut self) -> &mut {} {{ &mut self.{} }}\n",
+                        init, def_type, init
+                    )
+                    .as_ref(),
+                );
             }
         }
-        globals.insert("fields_def".into(), liquid::value::Value::scalar(fields_def));
-        globals.insert("fields_init".into(), liquid::value::Value::scalar(fields_init));
-        globals.insert("fields_args".into(), liquid::value::Value::scalar(fields_args));
-        globals.insert("fields_accessor".into(), liquid::value::Value::scalar(fields_accessor));
+        globals.insert(
+            "fields_def".into(),
+            liquid::value::Value::scalar(fields_def),
+        );
+        globals.insert(
+            "fields_init".into(),
+            liquid::value::Value::scalar(fields_init),
+        );
+        globals.insert(
+            "fields_args".into(),
+            liquid::value::Value::scalar(fields_args),
+        );
+        globals.insert(
+            "fields_accessor".into(),
+            liquid::value::Value::scalar(fields_accessor),
+        );
 
         let user_code = {
             let mut code = String::new();
@@ -494,31 +537,66 @@ impl<'a> {{lexer_name}}<'a> {
         let action: Vec<i32> = self.emitter.get_action();
         let lexstate: Vec<i32> = self.emitter.get_lexstate();
 
-        globals.insert("row_num".into(), liquid::value::Value::scalar(row.len() as i32));
-        globals.insert("row_value".into(), liquid::value::Value::scalar(format!("{:?}", row)));
-        globals.insert("trans_num".into(), liquid::value::Value::scalar(table.len() as i32));
-        globals.insert("trans_value".into(), liquid::value::Value::scalar(format!("{:?}", table)));
-        globals.insert("attr_num".into(), liquid::value::Value::scalar(attr.len() as i32));
-        globals.insert("attr_value".into(), liquid::value::Value::scalar(format!("{:?}", attr)));
-        globals.insert("action_num".into(), liquid::value::Value::scalar(action.len() as i32));
-        globals.insert("action_value".into(), liquid::value::Value::scalar(format!("{:?}", action)));
-        globals.insert("lexstate_num".into(), liquid::value::Value::scalar(lexstate.len() as i32));
-        globals.insert("lexstate_value".into(), liquid::value::Value::scalar(format!("{:?}", lexstate)));
+        globals.insert(
+            "row_num".into(),
+            liquid::value::Value::scalar(row.len() as i32),
+        );
+        globals.insert(
+            "row_value".into(),
+            liquid::value::Value::scalar(format!("{:?}", row)),
+        );
+        globals.insert(
+            "trans_num".into(),
+            liquid::value::Value::scalar(table.len() as i32),
+        );
+        globals.insert(
+            "trans_value".into(),
+            liquid::value::Value::scalar(format!("{:?}", table)),
+        );
+        globals.insert(
+            "attr_num".into(),
+            liquid::value::Value::scalar(attr.len() as i32),
+        );
+        globals.insert(
+            "attr_value".into(),
+            liquid::value::Value::scalar(format!("{:?}", attr)),
+        );
+        globals.insert(
+            "action_num".into(),
+            liquid::value::Value::scalar(action.len() as i32),
+        );
+        globals.insert(
+            "action_value".into(),
+            liquid::value::Value::scalar(format!("{:?}", action)),
+        );
+        globals.insert(
+            "lexstate_num".into(),
+            liquid::value::Value::scalar(lexstate.len() as i32),
+        );
+        globals.insert(
+            "lexstate_value".into(),
+            liquid::value::Value::scalar(format!("{:?}", lexstate)),
+        );
 
         let klass = "%class".to_string();
         let lexer_name = match keys.get(&klass) {
             Some(s) => s.clone(),
             None => "Lexer".to_string(),
         };
-        globals.insert("lexer_name".into(), liquid::value::Value::scalar(lexer_name.clone()));
+        globals.insert(
+            "lexer_name".into(),
+            liquid::value::Value::scalar(lexer_name.clone()),
+        );
 
         let result = "%result_type".to_string();
         let result_type = match keys.get(&result) {
             Some(s) => s.clone(),
             None => "i32".to_string(),
         };
-        globals.insert("result_type".into(), liquid::value::Value::scalar(result_type));
-
+        globals.insert(
+            "result_type".into(),
+            liquid::value::Value::scalar(result_type),
+        );
 
         let previous_def = "    previous: char,";
         let previous_init = "            previous: 0 as char,";
@@ -546,25 +624,52 @@ impl<'a> {{lexer_name}}<'a> {
                     _ => self.zz_at_bol = false,
                 }
             }"#;
-        globals.insert("previous_def".into(), liquid::value::Value::scalar(if self.bol_used { previous_def } else { "" }));
-        globals.insert("previous_init".into(), liquid::value::Value::scalar(if self.bol_used { previous_init } else { "" }));
-        globals.insert("zz_bol_def".into(), liquid::value::Value::scalar(if self.bol_used { zz_bol_def } else { "" }));
-        globals.insert("zz_bol_init".into(), liquid::value::Value::scalar(if self.bol_used { zz_bol_init } else { "" }));
-        globals.insert("zz_bol_flag".into(), liquid::value::Value::scalar(if self.bol_used { zz_bol_flag } else { "" }));
+        globals.insert(
+            "previous_def".into(),
+            liquid::value::Value::scalar(if self.bol_used { previous_def } else { "" }),
+        );
+        globals.insert(
+            "previous_init".into(),
+            liquid::value::Value::scalar(if self.bol_used { previous_init } else { "" }),
+        );
+        globals.insert(
+            "zz_bol_def".into(),
+            liquid::value::Value::scalar(if self.bol_used { zz_bol_def } else { "" }),
+        );
+        globals.insert(
+            "zz_bol_init".into(),
+            liquid::value::Value::scalar(if self.bol_used { zz_bol_init } else { "" }),
+        );
+        globals.insert(
+            "zz_bol_flag".into(),
+            liquid::value::Value::scalar(if self.bol_used { zz_bol_flag } else { "" }),
+        );
         let copy_previous = "self.previous = zz_input;";
         let next_input = if self.bol_used {
             "self.previous = current.next().unwrap(); zz_input = self.previous as i32;"
         } else {
             "zz_input = current.next().unwrap() as i32;"
         };
-        globals.insert("next_input".into(), liquid::value::Value::scalar(next_input));
-        globals.insert("copy_previous".into(), liquid::value::Value::scalar(if self.bol_used { copy_previous } else { "" }));
+        globals.insert(
+            "next_input".into(),
+            liquid::value::Value::scalar(next_input),
+        );
+        globals.insert(
+            "copy_previous".into(),
+            liquid::value::Value::scalar(if self.bol_used { copy_previous } else { "" }),
+        );
         let zz_state_update = if self.bol_used {
             format!("            self.zz_state = {}::ZZ_LEXSTATE[self.zz_lexical_state + (self.zz_at_bol as usize)] as usize;", lexer_name)
         } else {
-            format!("            self.zz_state = {}::ZZ_LEXSTATE[self.zz_lexical_state] as usize;", lexer_name)
+            format!(
+                "            self.zz_state = {}::ZZ_LEXSTATE[self.zz_lexical_state] as usize;",
+                lexer_name
+            )
         };
-        globals.insert("zz_state_update".into(), liquid::value::Value::scalar(zz_state_update));
+        globals.insert(
+            "zz_state_update".into(),
+            liquid::value::Value::scalar(zz_state_update),
+        );
 
         let mut const_values = String::new();
         let mut lex_num = 0usize;
@@ -586,21 +691,34 @@ impl<'a> {{lexer_name}}<'a> {
                     continue;
                 }
                 let state = format!("{}::{}", lexer_name, action.state).to_string();
-                e_actions.push_str(format!("                     {} => {{ {} }}\n", state, action.content).as_ref());
+                e_actions.push_str(
+                    format!(
+                        "                     {} => {{ {} }}\n",
+                        state, action.content
+                    )
+                    .as_ref(),
+                );
                 last += 1;
-                e_actions.push_str(format!("                     {} => {{ /*skip*/ }}\n", last).as_ref());
+                e_actions.push_str(
+                    format!("                     {} => {{ /*skip*/ }}\n", last).as_ref(),
+                );
             }
             e_actions.push_str(format!("                     _ => {{ {} }}\n", default).as_ref());
             e_actions.push_str("                 }\n");
         }
-        globals.insert("eof_actions".into(), liquid::value::Value::scalar(e_actions));
+        globals.insert(
+            "eof_actions".into(),
+            liquid::value::Value::scalar(e_actions),
+        );
 
         let col_map: Vec<i32> = self.emitter.get_col_map();
         let mut cmap_values = String::new();
         let intervals = self.char_classes.get_intervals();
         for interval in intervals {
             let class = interval.char_class;
-            if class == 0 { continue; }
+            if class == 0 {
+                continue;
+            }
 
             for i in interval.start..(interval.end + 1) {
                 let s = format!("        cmap[{}] = {};\n", i, col_map[class]);
@@ -620,9 +738,18 @@ impl<'a> {{lexer_name}}<'a> {
             i += 1;
         }
 
-        globals.insert("const_values".into(), liquid::value::Value::scalar(const_values));
-        globals.insert("cmap_values".into(), liquid::value::Value::scalar(cmap_values));
-        globals.insert("action_list".into(), liquid::value::Value::scalar(action_list));
+        globals.insert(
+            "const_values".into(),
+            liquid::value::Value::scalar(const_values),
+        );
+        globals.insert(
+            "cmap_values".into(),
+            liquid::value::Value::scalar(cmap_values),
+        );
+        globals.insert(
+            "action_list".into(),
+            liquid::value::Value::scalar(action_list),
+        );
         let output = template.render(&globals).unwrap();
         output
     }

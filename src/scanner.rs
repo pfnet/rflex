@@ -1,20 +1,20 @@
 // BNF of regular expression: https://qiita.com/kmizu/items/d574e84c91ba240b1a1f
 
-use std::fmt;
-use std::io::{BufRead, BufWriter};
-use std::io::Write;
-use std::fs::File;
-use std::str::Chars;
-use std::slice::Iter;
-use std::iter::Peekable;
-
-type Pattern = Vec<Ast>;
-
-use crate::nfa::NFA;
-use crate::codegen::{CodeGen, Emitter};
-use crate::charclasses::{CharClasses, Interval, IntCharSet};
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt;
+use std::fs::File;
+use std::io::Write;
+use std::io::{BufRead, BufWriter};
+use std::iter::Peekable;
+use std::slice::Iter;
+use std::str::Chars;
+
+use crate::charclasses::{CharClasses, IntCharSet, Interval};
+use crate::codegen::{CodeGen, Emitter};
+use crate::nfa::NFA;
+
+type Pattern = Vec<Ast>;
 
 // TODO: keep the position which declared
 #[derive(Debug, PartialEq)]
@@ -23,15 +23,23 @@ pub enum Ast {
     StringLiteral(String),
     CharClass(Vec<Interval>),
     NotCharClass(Vec<Interval>),
-    Star,         // zero or more before symbol
-    Plus,         // one or more
-    Question,     // zero or one
-    Alternation,  // A or B
-    Name(String), // expansion of the name definition
-    PBegin, // begin parenthesis
-    PEnd,   // end parenthesis
+    // zero or more before symbol
+    Star,
+    // one or more
+    Plus,
+    // zero or one
+    Question,
+    // A or B
+    Alternation,
+    // expansion of the name definition
+    Name(String),
+    // begin parenthesis
+    PBegin,
+    // end parenthesis
+    PEnd,
     BeginOfLine,
-    EOF, // <<EOF>>
+    // <<EOF>>
+    EOF,
 }
 
 #[derive(Debug)]
@@ -78,7 +86,7 @@ impl<R: BufRead> Scanner<R> {
 
     pub fn scan(&mut self) -> Result<(), ()> {
         if let Err(e) = self.parse_definitions() {
-            eprintln!("Error in parsing definitions block: {}", e);;
+            eprintln!("Error in parsing definitions block: {}", e);
             return Err(());
         }
         if let Err(e) = self.parse_rules() {
@@ -122,7 +130,11 @@ impl<R: BufRead> Scanner<R> {
                 Ok(_) => {
                     self.line_num += 1;
                     if (line.starts_with(' ') || line.starts_with('\t')) && continue_action {
-                        self.actions.last_mut().unwrap().content.push_str(format!("\n{}", line.trim_end()).as_ref());
+                        self.actions
+                            .last_mut()
+                            .unwrap()
+                            .content
+                            .push_str(format!("\n{}", line.trim_end()).as_ref());
                         continue;
                     }
 
@@ -137,19 +149,17 @@ impl<R: BufRead> Scanner<R> {
                     if trimed_line.chars().next().unwrap() == '%' {
                         let splits = trimed_line.split_whitespace().collect::<Vec<&str>>();
                         let key = splits[0];
-                        let value = if splits.len() >= 2 {
-                            splits[1]
-                        } else {
-                            ""
-                        };
+                        let value = if splits.len() >= 2 { splits[1] } else { "" };
                         match key {
                             "%field" => {
                                 if splits.len() < 3 {
-                                    return Err("unmatch field type that expected `<type> <field_name>`");
+                                    return Err(
+                                        "unmatch field type that expected `<type> <field_name>`",
+                                    );
                                 }
                                 self.fields.push((value.to_string(), splits[2].to_string()));
                             }
-                            key  => {
+                            key => {
                                 self.keys.insert(key.to_string(), value.to_string());
                             }
                         }
@@ -157,11 +167,20 @@ impl<R: BufRead> Scanner<R> {
                         continue;
                     }
 
-                    let parse = parse_regex2(self.line_num, &mut trimed_line.to_string(), &mut self.char_classes);
+                    let parse = parse_regex2(
+                        self.line_num,
+                        &mut trimed_line.to_string(),
+                        &mut self.char_classes,
+                    );
                     match parse {
                         Ok((rule, action, state)) => {
                             self.rules.push(rule.clone());
-                            self.actions.push(Action { content: action, num: 0i32, eof: rule.kind == IRKind::EOF, state: state.clone() });
+                            self.actions.push(Action {
+                                content: action,
+                                num: 0i32,
+                                eof: rule.kind == IRKind::EOF,
+                                state: state.clone(),
+                            });
                             self.lex_states.push(state);
                             continue_action = true;
                         }
@@ -197,9 +216,16 @@ impl<R: BufRead> Scanner<R> {
     }
 
     pub fn build(&mut self) {
-        let lex_set = self.lex_states.iter().map(|x| x.clone()).collect::<HashSet<_>>();
+        let lex_set = self
+            .lex_states
+            .iter()
+            .map(|x| x.clone())
+            .collect::<HashSet<_>>();
         let lex_state_list = lex_set.iter().map(|x| x.clone()).collect::<Vec<_>>();
-        self.lex_state_list = lex_state_list.into_iter().filter(|s| !(s.eq("YYINITIAL") || s.is_empty())).collect::<Vec<_>>();
+        self.lex_state_list = lex_state_list
+            .into_iter()
+            .filter(|s| !(s.eq("YYINITIAL") || s.is_empty()))
+            .collect::<Vec<_>>();
         self.lex_state_list.insert(0, String::from("YYINITIAL"));
 
         let est_size = self.calculate_nfa_size() * 2;
@@ -213,11 +239,12 @@ impl<R: BufRead> Scanner<R> {
                 s => match self.lex_state_list.iter().position(|x| x.eq(s)) {
                     Some(pos) => pos,
                     None => 0,
-                }
+                },
             };
 
             self.actions[i].num = (i + 1) as i32;
-            self.nfa.insert_regex(&ir, lexstate, self.actions[i].clone());
+            self.nfa
+                .insert_regex(&ir, lexstate, self.actions[i].clone());
         }
     }
 
@@ -239,9 +266,18 @@ impl<R: BufRead> Scanner<R> {
         let mut dfa = self.nfa.get_dfa();
         dfa.minimize();
         let mut emitter = Emitter::new(&dfa);
-        let mut gen = CodeGen::new(&mut emitter, self.char_classes.clone(), self.lex_state_list.clone());
+        let mut gen = CodeGen::new(
+            &mut emitter,
+            self.char_classes.clone(),
+            self.lex_state_list.clone(),
+        );
         gen.bol_used = self.nfa.bol_used;
-        let s = gen.generate(&self.keys, &self.fields, &self.nfa.eof_action, self.user_code.clone());
+        let s = gen.generate(
+            &self.keys,
+            &self.fields,
+            &self.nfa.eof_action,
+            self.user_code.clone(),
+        );
 
         out.write_all(s.as_bytes())?;
         out.write(new_line)?;
@@ -269,7 +305,11 @@ pub struct RegexScanner<'a, 'b> {
 const NEW_LINE: &str = "\n\r\u{000B}\u{000C}\u{0085}\u{2028}\u{2029}";
 
 impl<'a, 'b> RegexScanner<'a, 'b> {
-    pub fn new(line_num: usize, s: &'a String, char_classes: &'b mut CharClasses) -> RegexScanner<'a, 'b> {
+    pub fn new(
+        line_num: usize,
+        s: &'a String,
+        char_classes: &'b mut CharClasses,
+    ) -> RegexScanner<'a, 'b> {
         RegexScanner {
             chars: s.chars(),
             line_num,
@@ -309,7 +349,9 @@ impl<'a, 'b> RegexScanner<'a, 'b> {
                     state_name.push(match chars.next().ok_or(PatternError::ConditionError)? {
                         ch if ch.is_ascii_uppercase() => ch,
                         '>' => break,
-                        _ => { return Err(PatternError::ConditionError); },
+                        _ => {
+                            return Err(PatternError::ConditionError);
+                        }
                     });
                 }
             }
@@ -328,7 +370,8 @@ impl<'a, 'b> RegexScanner<'a, 'b> {
 
         if chars.clone().next() == Some('^') {
             chars.next();
-            self.char_classes.make_class_str(NEW_LINE.to_string(), false);
+            self.char_classes
+                .make_class_str(NEW_LINE.to_string(), false);
             pat.push(Ast::BeginOfLine);
         }
 
@@ -381,7 +424,7 @@ impl<'a, 'b> RegexScanner<'a, 'b> {
                     let mut v: Vec<Interval> = vec![];
                     v.push(Interval::new('\n' as usize, '\r' as usize));
                     v.push(Interval::new('\u{0085}' as usize, '\u{0085}' as usize));
-                    v.push(Interval::new('\u{2028}' as usize,'\u{2029}' as usize));
+                    v.push(Interval::new('\u{2028}' as usize, '\u{2029}' as usize));
                     self.char_classes.make_class_intervals(v.clone(), false);
                     Ast::NotCharClass(v)
                 }
@@ -389,41 +432,52 @@ impl<'a, 'b> RegexScanner<'a, 'b> {
                     let mut v: Vec<Interval> = vec![];
                     v.push(Interval::new('\n' as usize, '\r' as usize));
                     v.push(Interval::new('\u{0085}' as usize, '\u{0085}' as usize));
-                    v.push(Interval::new('\u{2028}' as usize,'\u{2029}' as usize));
-                    self.char_classes.make_class_str(NEW_LINE.to_string(), false);
+                    v.push(Interval::new('\u{2028}' as usize, '\u{2029}' as usize));
+                    self.char_classes
+                        .make_class_str(NEW_LINE.to_string(), false);
                     Ast::CharClass(v)
-                },
-                Some(' ') | Some('\t') | Some('\n') => break,
-                Some('\\') => {
-                    match chars.next() {
-                        Some('t') => {
-                            self.char_classes.make_class_char('\t' as usize, false);
-                            Ast::Letter('\t')
-                        }
-                        Some('r') => {
-                            self.char_classes.make_class_char('\r' as usize, false);
-                            Ast::Letter('\r')
-                        }
-                        Some('n') => {
-                            let mut v: Vec<Interval> = vec![];
-                            v.push(Interval::new('\n' as usize, '\r' as usize));
-                            v.push(Interval::new('\u{0085}' as usize, '\u{0085}' as usize));
-                            v.push(Interval::new('\u{2028}' as usize,'\u{2029}' as usize));
-                            self.char_classes.make_class_str(NEW_LINE.to_string(), false);
-                            Ast::CharClass(v)
-                        }
-                        Some(ch) if ch == '\\' || ch == '*' || ch == '+' || ch == '.' || ch == '?' ||
-                            ch == '^' || ch == '$' || ch == '(' || ch == ')' || ch == '|' || ch == '[' ||
-                            ch == ']' => {
-                            Ast::Letter(ch)
-                        }
-                        _ => return Err(PatternError::LiteralError),
-                    }
                 }
+                Some(' ') | Some('\t') | Some('\n') => break,
+                Some('\\') => match chars.next() {
+                    Some('t') => {
+                        self.char_classes.make_class_char('\t' as usize, false);
+                        Ast::Letter('\t')
+                    }
+                    Some('r') => {
+                        self.char_classes.make_class_char('\r' as usize, false);
+                        Ast::Letter('\r')
+                    }
+                    Some('n') => {
+                        let mut v: Vec<Interval> = vec![];
+                        v.push(Interval::new('\n' as usize, '\r' as usize));
+                        v.push(Interval::new('\u{0085}' as usize, '\u{0085}' as usize));
+                        v.push(Interval::new('\u{2028}' as usize, '\u{2029}' as usize));
+                        self.char_classes
+                            .make_class_str(NEW_LINE.to_string(), false);
+                        Ast::CharClass(v)
+                    }
+                    Some(ch)
+                        if ch == '\\'
+                            || ch == '*'
+                            || ch == '+'
+                            || ch == '.'
+                            || ch == '?'
+                            || ch == '^'
+                            || ch == '$'
+                            || ch == '('
+                            || ch == ')'
+                            || ch == '|'
+                            || ch == '['
+                            || ch == ']' =>
+                    {
+                        Ast::Letter(ch)
+                    }
+                    _ => return Err(PatternError::LiteralError),
+                },
                 Some(ch) => {
                     self.char_classes.make_class_char(ch as usize, false);
                     Ast::Letter(ch)
-                },
+                }
             })
         }
 
@@ -463,7 +517,14 @@ fn convert_char_class(char_class: String) -> Result<Vec<Interval>, PatternError>
             Some('\\') => {
                 itr.next();
                 match itr.next() {
-                    Some(ch) if ch == '\\' || ch == '^' || ch == '-' || ch == ']' || ch == '/' || ch == '[' => {
+                    Some(ch)
+                        if ch == '\\'
+                            || ch == '^'
+                            || ch == '-'
+                            || ch == ']'
+                            || ch == '/'
+                            || ch == '[' =>
+                    {
                         char_set.add_set(&IntCharSet::with_char(ch as usize));
                     }
                     Some('r') => {
@@ -494,7 +555,11 @@ fn parse_regex(line_num: usize, line: &String) -> Result<(IR, String), Translate
     Ok((ir, code))
 }
 
-fn parse_regex2(line_num: usize, line: &String, char_classes: &mut CharClasses) -> Result<(IR, String, String), TranslateError> {
+fn parse_regex2(
+    line_num: usize,
+    line: &String,
+    char_classes: &mut CharClasses,
+) -> Result<(IR, String, String), TranslateError> {
     let mut parser = RegexScanner::new(line_num, line, char_classes);
     let scan_res = parser.scan();
     if scan_res.is_err() {
@@ -545,9 +610,12 @@ impl Clone for Repetition {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum RepetitionKind {
-    ZeroOrOne,  // ?
-    ZeroOrMore, // *
-    OneOrMore,  // +
+    // ?
+    ZeroOrOne,
+    // *
+    ZeroOrMore,
+    // +
+    OneOrMore,
 }
 
 #[derive(Debug)]
@@ -600,31 +668,20 @@ pub fn get_nfa_size(ir: &IR) -> usize {
             v.len() + v.iter().fold(0, |sum, ir| sum + get_nfa_size(ir))
         }
         IRKind::Literal(_) => 1,
-        IRKind::StringLiteral(s) => {
-            s.len()
-        }
-        IRKind::CharClass(i) | IRKind::NotCharClass(i) => {
-            i.len()
-        }
-        IRKind::BOL(ir) | IRKind::Group(ir) => {
-            get_nfa_size(ir.as_ref())
-        }
-        IRKind::EOF => {
-            0
-        }
-        IRKind::Repetition(rep) => {
-            get_nfa_size(rep.ir.as_ref()) + 1
-        }
+        IRKind::StringLiteral(s) => s.len(),
+        IRKind::CharClass(i) | IRKind::NotCharClass(i) => i.len(),
+        IRKind::BOL(ir) | IRKind::Group(ir) => get_nfa_size(ir.as_ref()),
+        IRKind::EOF => 0,
+        IRKind::Repetition(rep) => get_nfa_size(rep.ir.as_ref()) + 1,
     }
 }
 
 #[derive(Debug)]
-pub struct Translator {
-}
+pub struct Translator {}
 
 impl Translator {
     pub fn new() -> Translator {
-        Translator { }
+        Translator {}
     }
 
     pub fn translate(&self, pat: &Pattern) -> Result<IR, TranslateError> {
@@ -639,8 +696,10 @@ impl Translator {
         loop {
             let next = iter.peek().map(|&c| c);
             match next {
-                Some(&Ast::Alternation) => { iter.next(); /* continue */ },
-                Some(&Ast::PEnd) | None => break,   // break and skip to call iter.next()
+                Some(&Ast::Alternation) => {
+                    iter.next(); /* continue */
+                }
+                Some(&Ast::PEnd) | None => break, // break and skip to call iter.next()
                 _ => return Err(TranslateError::IllegalSyntaxExpr),
             }
 
@@ -651,7 +710,9 @@ impl Translator {
         match list.len() {
             0 => Err(TranslateError::IllegalSyntaxExpr),
             1 => Ok(list.first().unwrap().clone()),
-            _ => Ok(IR{kind: IRKind::Alternation(list)}),
+            _ => Ok(IR {
+                kind: IRKind::Alternation(list),
+            }),
         }
     }
 
@@ -671,7 +732,9 @@ impl Translator {
         match list.len() {
             0 => Err(TranslateError::IllegalSyntaxSequence),
             1 => Ok(list.first().unwrap().clone()),
-            _ => Ok(IR {kind: IRKind::Concat(list)}),
+            _ => Ok(IR {
+                kind: IRKind::Concat(list),
+            }),
         }
     }
 
@@ -681,30 +744,45 @@ impl Translator {
 
         // optional
         let rep_kind = match next {
-            Some(&Ast::Star) => { iter.next(); Some(RepetitionKind::ZeroOrMore) },
-            Some(&Ast::Plus) => { iter.next(); Some(RepetitionKind::OneOrMore) },
-            Some(&Ast::Question) => { iter.next(); Some(RepetitionKind::ZeroOrOne) },
+            Some(&Ast::Star) => {
+                iter.next();
+                Some(RepetitionKind::ZeroOrMore)
+            }
+            Some(&Ast::Plus) => {
+                iter.next();
+                Some(RepetitionKind::OneOrMore)
+            }
+            Some(&Ast::Question) => {
+                iter.next();
+                Some(RepetitionKind::ZeroOrOne)
+            }
             _ => None,
         };
 
         match rep_kind {
-            Some(kind) => {
-                Ok(IR {kind: IRKind::Repetition(Repetition { ir: Box::new(primary), kind })})
-            }
+            Some(kind) => Ok(IR {
+                kind: IRKind::Repetition(Repetition {
+                    ir: Box::new(primary),
+                    kind,
+                }),
+            }),
             _ => Ok(primary),
         }
     }
 
     fn eat_primary(&self, iter: &mut Peekable<Iter<Ast>>) -> Result<IR, TranslateError> {
-        let first = match iter.next() { Some(x) => x, _ => return Err(TranslateError::IllegalSyntaxPrimary) };
+        let first = match iter.next() {
+            Some(x) => x,
+            _ => return Err(TranslateError::IllegalSyntaxPrimary),
+        };
         Ok(match first {
             Ast::BeginOfLine => {
                 let expr = self.eat_expression(iter)?;
-                IR { kind: IRKind::BOL(Box::new(expr)) }
+                IR {
+                    kind: IRKind::BOL(Box::new(expr)),
+                }
             }
-            Ast::EOF => {
-                IR { kind: IRKind::EOF }
-            }
+            Ast::EOF => IR { kind: IRKind::EOF },
             Ast::Letter(ch) => IR {
                 kind: IRKind::Literal(*ch),
             },
@@ -734,8 +812,9 @@ impl Translator {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::io::BufReader;
+
+    use super::*;
 
     macro_rules! parse_ok {
         ($t:expr) => {{
@@ -896,68 +975,152 @@ mod tests {
 
     #[test]
     fn parse_ir_eq_concat_and_more() {
-        parse_ir_eq!("\"abc\"+\"fuga\"*  { code }",
-         IR {
-            kind: IRKind::Concat(vec![
-                IR {kind: IRKind::Repetition(Repetition {kind: RepetitionKind::OneOrMore, ir: Box::new(IR{kind: IRKind::StringLiteral("abc".to_string())})})},
-                IR {kind: IRKind::Repetition(Repetition {kind: RepetitionKind::ZeroOrMore, ir: Box::new(IR{kind: IRKind::StringLiteral("fuga".to_string())})})},
-            ]),
-        })
+        parse_ir_eq!(
+            "\"abc\"+\"fuga\"*  { code }",
+            IR {
+                kind: IRKind::Concat(vec![
+                    IR {
+                        kind: IRKind::Repetition(Repetition {
+                            kind: RepetitionKind::OneOrMore,
+                            ir: Box::new(IR {
+                                kind: IRKind::StringLiteral("abc".to_string())
+                            })
+                        })
+                    },
+                    IR {
+                        kind: IRKind::Repetition(Repetition {
+                            kind: RepetitionKind::ZeroOrMore,
+                            ir: Box::new(IR {
+                                kind: IRKind::StringLiteral("fuga".to_string())
+                            })
+                        })
+                    },
+                ]),
+            }
+        )
     }
 
     #[test]
     fn parse_ir_eq_alternation() {
-        parse_ir_eq!("\"ABC\"|\"fug\"  { code }", IR { kind: IRKind::Alternation(vec![
-                IR {kind: IRKind::StringLiteral("ABC".to_string())},
-                IR {kind: IRKind::StringLiteral("fug".to_string())},
-            ]),
-        })
+        parse_ir_eq!(
+            "\"ABC\"|\"fug\"  { code }",
+            IR {
+                kind: IRKind::Alternation(vec![
+                    IR {
+                        kind: IRKind::StringLiteral("ABC".to_string())
+                    },
+                    IR {
+                        kind: IRKind::StringLiteral("fug".to_string())
+                    },
+                ]),
+            }
+        )
     }
 
     #[test]
     fn parse_ir_eq_alternation_with_plus() {
-        parse_ir_eq!("\"ABC\"|\"def\"+  { code }", IR { kind: IRKind::Alternation(vec![
-                IR {kind: IRKind::StringLiteral("ABC".to_string())},
-                IR {kind: IRKind::Repetition(Repetition {kind: RepetitionKind::OneOrMore, ir: Box::new(IR{kind: IRKind::StringLiteral("def".to_string())})})},
-            ]),
-        })
+        parse_ir_eq!(
+            "\"ABC\"|\"def\"+  { code }",
+            IR {
+                kind: IRKind::Alternation(vec![
+                    IR {
+                        kind: IRKind::StringLiteral("ABC".to_string())
+                    },
+                    IR {
+                        kind: IRKind::Repetition(Repetition {
+                            kind: RepetitionKind::OneOrMore,
+                            ir: Box::new(IR {
+                                kind: IRKind::StringLiteral("def".to_string())
+                            })
+                        })
+                    },
+                ]),
+            }
+        )
     }
 
     #[test]
     fn parse_ir_eq_alternation_with_concat() {
-        parse_ir_eq!("\"ABC\"\"def\"|\"123\"\"xyz\"  { code }", IR { kind: IRKind::Alternation(vec![
-                IR {kind: IRKind::Concat(vec![
-                    IR {kind: IRKind::StringLiteral("ABC".to_string())},
-                    IR {kind: IRKind::StringLiteral("def".to_string())},
-                ])},
-                IR {kind: IRKind::Concat(vec![
-                    IR {kind: IRKind::StringLiteral("123".to_string())},
-                    IR {kind: IRKind::StringLiteral("xyz".to_string())},
-                ])},
-            ]),
-        })
+        parse_ir_eq!(
+            "\"ABC\"\"def\"|\"123\"\"xyz\"  { code }",
+            IR {
+                kind: IRKind::Alternation(vec![
+                    IR {
+                        kind: IRKind::Concat(vec![
+                            IR {
+                                kind: IRKind::StringLiteral("ABC".to_string())
+                            },
+                            IR {
+                                kind: IRKind::StringLiteral("def".to_string())
+                            },
+                        ])
+                    },
+                    IR {
+                        kind: IRKind::Concat(vec![
+                            IR {
+                                kind: IRKind::StringLiteral("123".to_string())
+                            },
+                            IR {
+                                kind: IRKind::StringLiteral("xyz".to_string())
+                            },
+                        ])
+                    },
+                ]),
+            }
+        )
     }
 
     #[test]
     fn parse_ir_eq_group() {
-        let rep = IR { kind: IRKind::Alternation(vec![
-            IR {kind: IRKind::StringLiteral("ABC".to_string())},
-            IR {kind: IRKind::StringLiteral("def".to_string())},
-        ])};
-        let right = IR { kind: IRKind::Repetition(Repetition {kind: RepetitionKind::OneOrMore, ir: Box::new(IR { kind: IRKind::Group(Box::new(rep)) })}) };
+        let rep = IR {
+            kind: IRKind::Alternation(vec![
+                IR {
+                    kind: IRKind::StringLiteral("ABC".to_string()),
+                },
+                IR {
+                    kind: IRKind::StringLiteral("def".to_string()),
+                },
+            ]),
+        };
+        let right = IR {
+            kind: IRKind::Repetition(Repetition {
+                kind: RepetitionKind::OneOrMore,
+                ir: Box::new(IR {
+                    kind: IRKind::Group(Box::new(rep)),
+                }),
+            }),
+        };
 
         parse_ir_eq!("(\"ABC\"|\"def\")+  { code }", right);
     }
 
     #[test]
     fn parse_ir_bol() {
-        let rep = IR { kind: IRKind::Alternation(vec![
-            IR {kind: IRKind::StringLiteral("ABC".to_string())},
-            IR {kind: IRKind::StringLiteral("def".to_string())},
-        ])};
-        let right = IR { kind: IRKind::Repetition(Repetition {kind: RepetitionKind::OneOrMore, ir: Box::new(IR { kind: IRKind::Group(Box::new(rep)) })}) };
+        let rep = IR {
+            kind: IRKind::Alternation(vec![
+                IR {
+                    kind: IRKind::StringLiteral("ABC".to_string()),
+                },
+                IR {
+                    kind: IRKind::StringLiteral("def".to_string()),
+                },
+            ]),
+        };
+        let right = IR {
+            kind: IRKind::Repetition(Repetition {
+                kind: RepetitionKind::OneOrMore,
+                ir: Box::new(IR {
+                    kind: IRKind::Group(Box::new(rep)),
+                }),
+            }),
+        };
 
-        parse_ir_eq!("^(\"ABC\"|\"def\")+  { code }", IR { kind: IRKind::BOL(Box::new(right))});
+        parse_ir_eq!(
+            "^(\"ABC\"|\"def\")+  { code }",
+            IR {
+                kind: IRKind::BOL(Box::new(right))
+            }
+        );
     }
 
     #[test]
@@ -967,8 +1130,9 @@ mod tests {
 
     #[test]
     fn nfa_build_str() {
-        let mut char_classes= CharClasses::new(0x110000 - 1);
-        let (ir, _block, _) = parse_regex2(0, &"\"abc\"  {block}".to_string(), &mut char_classes).unwrap();
+        let mut char_classes = CharClasses::new(0x110000 - 1);
+        let (ir, _block, _) =
+            parse_regex2(0, &"\"abc\"  {block}".to_string(), &mut char_classes).unwrap();
         let est_size = get_nfa_size(&ir) * 2;
         let num_lex = 1usize;
         let mut nfa: NFA = NFA::new_with_lex(num_lex, est_size, char_classes);
@@ -1002,9 +1166,11 @@ rankdir = LR
 
     #[test]
     fn nfa_build_alter() {
-        let mut char_classes= CharClasses::new(127);
-        let (ir1, _block1, _) = parse_regex2(0, &"\"abc\"  {block}".to_string(), &mut char_classes).unwrap();
-        let (ir2, _block2, _) = parse_regex2(1, &"\"def\"  {block}".to_string(), &mut char_classes).unwrap();
+        let mut char_classes = CharClasses::new(127);
+        let (ir1, _block1, _) =
+            parse_regex2(0, &"\"abc\"  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir2, _block2, _) =
+            parse_regex2(1, &"\"def\"  {block}".to_string(), &mut char_classes).unwrap();
 
         let est_size = (get_nfa_size(&ir1) + get_nfa_size(&ir2)) * 2;
         let num_lex = 1usize;
@@ -1057,7 +1223,10 @@ rankdir = LR
         assert_eq!(row, emitter.get_row_map());
 
         // translation table
-        let table: Vec<i32> = vec![-1, 2, -1, -1, 3, -1, -1, -1, -1, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, 5, -1, -1, -1, -1, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, 7, -1, -1, -1, -1, -1, -1, -1];
+        let table: Vec<i32> = vec![
+            -1, 2, -1, -1, 3, -1, -1, -1, -1, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, 5, -1, -1, -1,
+            -1, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, 7, -1, -1, -1, -1, -1, -1, -1,
+        ];
         assert_eq!(table, emitter.get_translation_table());
 
         let attr: Vec<i32> = vec![0, 0, 0, 0, 0, 0, 9, 9];
@@ -1071,13 +1240,21 @@ rankdir = LR
 
         let lex_state = vec!["YYINITIAL".to_string()];
         let mut gen = CodeGen::new(&mut emitter, char_classes, lex_state);
-        println!("\n{}", gen.generate(&HashMap::new(), &vec![], &vec![], vec![]));
+        println!(
+            "\n{}",
+            gen.generate(&HashMap::new(), &vec![], &vec![], vec![])
+        );
     }
 
     #[test]
     fn nfa_build_alter2() {
         let mut char_classes = CharClasses::new(127);
-        let (ir1, _block1, _) = parse_regex2(0, &"\"abc\"|\"def\"|\"ghe\"  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir1, _block1, _) = parse_regex2(
+            0,
+            &"\"abc\"|\"def\"|\"ghe\"  {block}".to_string(),
+            &mut char_classes,
+        )
+        .unwrap();
 
         let est_size = get_nfa_size(&ir1) * 2;
         let num_lex = 1usize;
@@ -1137,7 +1314,12 @@ rankdir = LR
     fn nfa_build_alter_group() {
         // test for parenthesis(group)
         let mut char_classes = CharClasses::new(127);
-        let (ir1, _block1, _) = parse_regex2(0, &"\"abc\"|(\"def\"|\"ghe\")  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir1, _block1, _) = parse_regex2(
+            0,
+            &"\"abc\"|(\"def\"|\"ghe\")  {block}".to_string(),
+            &mut char_classes,
+        )
+        .unwrap();
 
         let est_size = get_nfa_size(&ir1) * 2;
         let num_lex = 1usize;
@@ -1178,7 +1360,7 @@ rankdir = LR
 
         assert_eq!(Ok(1i32), l.next_token());
         assert_eq!(Ok(2i32), l.next_token());
-        assert_eq!(Err(LexerError::EOF), l.next_token());  // EOF
+        assert_eq!(Err(LexerError::EOF), l.next_token()); // EOF
         assert_eq!(true, l.is_eof());
     }
 
@@ -1196,6 +1378,7 @@ rankdir = LR
         EOF,
         Unmatch,
     }
+
     struct Lexer<'a> {
         cmap: Vec<usize>,
         start: Chars<'a>,
@@ -1213,7 +1396,10 @@ rankdir = LR
     impl<'a> Lexer<'a> {
         pub const ZZ_ROW: [usize; 8] = [0, 0, 7, 14, 21, 28, 35, 35];
         pub const ZZ_LEXSTATE: [i32; 2] = [0, 0];
-        pub const ZZ_TRANS: [i32; 42] = [-1, 2, -1, -1, 3, -1, -1, -1, -1, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, 5, -1, -1, -1, -1, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, 7, -1, -1, -1, -1, -1, -1, -1];
+        pub const ZZ_TRANS: [i32; 42] = [
+            -1, 2, -1, -1, 3, -1, -1, -1, -1, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, 5, -1, -1, -1,
+            -1, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, 7, -1, -1, -1, -1, -1, -1, -1,
+        ];
         pub const ZZ_ATTR: [i32; 8] = [0, 0, 0, 0, 0, 0, 9, 9];
         pub const ZZ_ACTION: [i32; 8] = [0, 0, 0, 0, 0, 0, 1, 2];
         pub const YYINITIAL: usize = 0;
@@ -1263,7 +1449,10 @@ rankdir = LR
             let mut chars = self.start.clone();
 
             for _ in 0..len {
-                text.push(match chars.next() { Some(c) => c, _ => break,});
+                text.push(match chars.next() {
+                    Some(c) => c,
+                    _ => break,
+                });
             }
             text
         }
@@ -1324,7 +1513,7 @@ rankdir = LR
                             break 'zz_for_action;
                         }
                     }
-                }   // loop 'zz_for_action
+                } // loop 'zz_for_action
 
                 // store back cached position
                 self.zz_marked_pos = zz_marked_pos_l;
@@ -1345,23 +1534,23 @@ rankdir = LR
                             assert_eq!(Some('a'), self.yycharat(0));
                             assert_eq!(Some('b'), self.yycharat(1));
                             return Ok(1i32);
-                        },
+                        }
                         2 => {
                             assert_eq!(3, self.yylength());
                             assert_eq!("def", self.yytext());
                             assert_eq!(Some('d'), self.yycharat(0));
                             assert_eq!(Some('e'), self.yycharat(1));
                             return Ok(2i32);
-                        },
-                        3 | 4 => { /* nothing */ },
+                        }
+                        3 | 4 => { /* nothing */ }
                         _ => {
                             println!("err zz_action = {}, action = {}", zz_action, action);
                             return Err(LexerError::Unmatch);
                         }
                     }
                 }
-            }   // loop
-            // never reach end of function
+            } // loop
+              // never reach end of function
         }
     }
 
@@ -1374,9 +1563,11 @@ rankdir = LR
 
     #[test]
     fn nfa_build_charset() {
-        let mut char_classes= CharClasses::new(127);
-        let (ir1, _block1, _) = parse_regex2(0, &"\"ab\"[d-f]  {block}".to_string(), &mut char_classes).unwrap();
-        let (ir2, _block2, _) = parse_regex2(0, &"\"A\"[f]    {block}".to_string(), &mut char_classes).unwrap();
+        let mut char_classes = CharClasses::new(127);
+        let (ir1, _block1, _) =
+            parse_regex2(0, &"\"ab\"[d-f]  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir2, _block2, _) =
+            parse_regex2(0, &"\"A\"[f]    {block}".to_string(), &mut char_classes).unwrap();
 
         let est_size = (get_nfa_size(&ir1) + get_nfa_size(&ir2)) * 2;
         let num_lex = 1usize;
@@ -1432,7 +1623,10 @@ rankdir = LR
         assert_eq!(row, emitter.get_row_map());
 
         // translation table
-        let table: Vec<i32> = vec![-1, 2, -1, -1, 3, -1, -1, -1, 4, -1, -1, -1, -1, -1, -1, -1, -1, 5, -1, -1, -1, 6, -1, 6, -1, -1, -1, -1, -1, -1];
+        let table: Vec<i32> = vec![
+            -1, 2, -1, -1, 3, -1, -1, -1, 4, -1, -1, -1, -1, -1, -1, -1, -1, 5, -1, -1, -1, 6, -1,
+            6, -1, -1, -1, -1, -1, -1,
+        ];
         assert_eq!(table, emitter.get_translation_table());
 
         let attr: Vec<i32> = vec![0, 0, 0, 0, 0, 9, 9];
@@ -1445,8 +1639,10 @@ rankdir = LR
     #[test]
     fn nfa_build_notcharset() {
         let mut char_classes = CharClasses::new(1114111);
-        let (ir1, _block1, _) = parse_regex2(0, &"\"ab\"[d-f]  {block}".to_string(), &mut char_classes).unwrap();
-        let (ir2, _block2, _) = parse_regex2(0, &"\"A\"[^b-g]    {block}".to_string(), &mut char_classes).unwrap();
+        let (ir1, _block1, _) =
+            parse_regex2(0, &"\"ab\"[d-f]  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir2, _block2, _) =
+            parse_regex2(0, &"\"A\"[^b-g]    {block}".to_string(), &mut char_classes).unwrap();
 
         let est_size = (get_nfa_size(&ir1) + get_nfa_size(&ir2)) * 2;
         let num_lex = 1usize;
@@ -1499,8 +1695,10 @@ rankdir = LR
     #[test]
     fn nfa_build_char_class() {
         let mut char_classes = CharClasses::new(1114111);
-        let (ir1, _block1, _) = parse_regex2(0, &"[a-z]  {block}".to_string(), &mut char_classes).unwrap();
-        let (ir2, _block2, _) = parse_regex2(0, &"[A-Z]    {block}".to_string(), &mut char_classes).unwrap();
+        let (ir1, _block1, _) =
+            parse_regex2(0, &"[a-z]  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir2, _block2, _) =
+            parse_regex2(0, &"[A-Z]    {block}".to_string(), &mut char_classes).unwrap();
 
         let est_size = (get_nfa_size(&ir1) + get_nfa_size(&ir2)) * 2 * 2;
         let num_lex = 1usize;
@@ -1558,9 +1756,12 @@ rankdir = LR
     #[test]
     fn nfa_build_repetition() {
         let mut char_classes = CharClasses::new(127);
-        let (ir1, _block1, _) = parse_regex2(0, &"\"ab\"+  {block}".to_string(), &mut char_classes).unwrap();
-        let (ir2, _block2, _) = parse_regex2(0, &"\"cd\"*  {block}".to_string(), &mut char_classes).unwrap();
-        let (ir3, _block3, _) = parse_regex2(0, &"\"ef\"?  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir1, _block1, _) =
+            parse_regex2(0, &"\"ab\"+  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir2, _block2, _) =
+            parse_regex2(0, &"\"cd\"*  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir3, _block3, _) =
+            parse_regex2(0, &"\"ef\"?  {block}".to_string(), &mut char_classes).unwrap();
 
         let est_size = (get_nfa_size(&ir1) + get_nfa_size(&ir2) + get_nfa_size(&ir3)) * 2;
         let num_lex = 1usize;
@@ -1627,10 +1828,13 @@ rankdir = LR
 
     #[test]
     fn build_trivial() {
-        let mut char_classes= CharClasses::new(127);
-        let (ir1, _block1, _) = parse_regex2(0, &"\"ab\"[d-f]  {block}".to_string(), &mut char_classes).unwrap();
-        let (ir2, _block2, _) = parse_regex2(0, &"\"ABC\"    {block}".to_string(), &mut char_classes).unwrap();
-        let (ir3, _block3, _) = parse_regex2(0, &"\"pattern\"    {block}".to_string(), &mut char_classes).unwrap();
+        let mut char_classes = CharClasses::new(127);
+        let (ir1, _block1, _) =
+            parse_regex2(0, &"\"ab\"[d-f]  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir2, _block2, _) =
+            parse_regex2(0, &"\"ABC\"    {block}".to_string(), &mut char_classes).unwrap();
+        let (ir3, _block3, _) =
+            parse_regex2(0, &"\"pattern\"    {block}".to_string(), &mut char_classes).unwrap();
 
         let est_size = (get_nfa_size(&ir1) + get_nfa_size(&ir2) + get_nfa_size(&ir3)) * 2;
         let num_lex = 1usize;
@@ -1708,7 +1912,15 @@ rankdir = LR
         assert_eq!(row, emitter.get_row_map());
 
         // translation table
-        let table: Vec<i32> = vec![-1, 2, -1, -1, 3, -1, -1, 4, -1, -1, -1, -1, -1, -1, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 6, -1, -1, -1, -1, -1, -1, -1, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 8, -1, -1, -1, -1, -1, 8, -1, -1, -1, -1, -1, -1, -1, -1, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 12, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 13, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 14];
+        let table: Vec<i32> = vec![
+            -1, 2, -1, -1, 3, -1, -1, 4, -1, -1, -1, -1, -1, -1, 5, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, 6, -1, -1, -1, -1, -1, -1, -1, 7, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, 8, -1, -1, -1, -1, -1, 8, -1, -1, -1, -1, -1, -1, -1, -1, 9,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 10, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 11, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, 12, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 13, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 14,
+        ];
         assert_eq!(table, emitter.get_translation_table());
 
         let attr: Vec<i32> = vec![0, 0, 0, 0, 0, 0, 0, 0, 9, 9, 0, 0, 0, 0, 9];
@@ -1720,9 +1932,15 @@ rankdir = LR
 
     #[test]
     fn condition_2() {
-        let mut char_classes= CharClasses::new(127);
-        let (ir1, _block1, _) = parse_regex2(0, &"\"abc\"  {block}".to_string(), &mut char_classes).unwrap();
-        let (ir2, _block2, state) = parse_regex2(0, &"<NEXT>\"ABC\"    {block}".to_string(), &mut char_classes).unwrap();
+        let mut char_classes = CharClasses::new(127);
+        let (ir1, _block1, _) =
+            parse_regex2(0, &"\"abc\"  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir2, _block2, state) = parse_regex2(
+            0,
+            &"<NEXT>\"ABC\"    {block}".to_string(),
+            &mut char_classes,
+        )
+        .unwrap();
         assert_eq!(state, "NEXT");
 
         let est_size = (get_nfa_size(&ir1) + get_nfa_size(&ir2)) * 2;
@@ -1780,7 +1998,11 @@ rankdir = LR
         assert_eq!(row, emitter.get_row_map());
 
         // translation table
-        let table: Vec<i32> = vec![-1, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, 5, -1, -1, -1, -1, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, 7, -1, -1, -1, -1, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, 9, -1, -1, -1, -1, -1, -1, -1];
+        let table: Vec<i32> = vec![
+            -1, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, 5, -1, -1, -1, -1, 6, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, 7, -1, -1, -1, -1, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, 9, -1, -1,
+            -1, -1, -1, -1, -1,
+        ];
         assert_eq!(table, emitter.get_translation_table());
 
         let attr: Vec<i32> = vec![0, 0, 0, 0, 0, 0, 0, 0, 9, 9];
@@ -1793,7 +2015,8 @@ rankdir = LR
     #[test]
     fn a_b_c_dot() {
         let mut char_classes = CharClasses::new(1114111);
-        let (ir1, _block1, _) = parse_regex2(0, &"abc.  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir1, _block1, _) =
+            parse_regex2(0, &"abc.  {block}".to_string(), &mut char_classes).unwrap();
 
         let est_size = get_nfa_size(&ir1) * 2;
         let num_lex = 1usize;
@@ -1824,7 +2047,8 @@ rankdir = LR
     #[test]
     fn nfa_build_rep2() {
         let mut char_classes = CharClasses::new(1114111);
-        let (ir1, _block1, _) = parse_regex2(0, &"abc*   {block}".to_string(), &mut char_classes).unwrap();
+        let (ir1, _block1, _) =
+            parse_regex2(0, &"abc*   {block}".to_string(), &mut char_classes).unwrap();
 
         let est_size = get_nfa_size(&ir1) * 2;
         let num_lex = 1usize;
@@ -1877,7 +2101,8 @@ rankdir = LR
     #[test]
     fn nfa_build_rep3() {
         let mut char_classes = CharClasses::new(1114111);
-        let (ir1, _block1, _) = parse_regex2(0, &"a[b-d]*x   {block}".to_string(), &mut char_classes).unwrap();
+        let (ir1, _block1, _) =
+            parse_regex2(0, &"a[b-d]*x   {block}".to_string(), &mut char_classes).unwrap();
 
         let est_size = get_nfa_size(&ir1) * 2;
         let num_lex = 1usize;
@@ -1955,12 +2180,17 @@ rankdir = LR
     fn dfa_minimize_1() {
         // test with multiple lexical states
         let mut char_classes = CharClasses::new(1114111);
-        let (ir1, _block1, _) = parse_regex2(0, &"ab[b-d]*x   {block}".to_string(), &mut char_classes).unwrap();
-        let (ir2, _block2, _) = parse_regex2(0, &"a[b-d]*x   {block}".to_string(), &mut char_classes).unwrap();
-        let (ir3, _block3, _) = parse_regex2(0, &"ab[b-d]*cx*   {block}".to_string(), &mut char_classes).unwrap();
-        let (ir4, _block4, _) = parse_regex2(0, &"<NEXT>\"ABC\"  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir1, _block1, _) =
+            parse_regex2(0, &"ab[b-d]*x   {block}".to_string(), &mut char_classes).unwrap();
+        let (ir2, _block2, _) =
+            parse_regex2(0, &"a[b-d]*x   {block}".to_string(), &mut char_classes).unwrap();
+        let (ir3, _block3, _) =
+            parse_regex2(0, &"ab[b-d]*cx*   {block}".to_string(), &mut char_classes).unwrap();
+        let (ir4, _block4, _) =
+            parse_regex2(0, &"<NEXT>\"ABC\"  {block}".to_string(), &mut char_classes).unwrap();
 
-        let est_size = (get_nfa_size(&ir1) + get_nfa_size(&ir2) + get_nfa_size(&ir3) + get_nfa_size(&ir4)) * 2;
+        let est_size =
+            (get_nfa_size(&ir1) + get_nfa_size(&ir2) + get_nfa_size(&ir3) + get_nfa_size(&ir4)) * 2;
         let num_lex = 2usize;
         let mut nfa: NFA = NFA::new_with_lex(num_lex, est_size, char_classes);
         let action1 = Action::num(1);
@@ -2015,15 +2245,22 @@ rankdir = LR
         let row: Vec<i32> = vec![0, 9, 18, 27, 36, 45, 54, 63, 54, 72, 54, 81, 81];
         assert_eq!(row, emitter.get_row_map());
 
-        let table: Vec<i32> = vec![-1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 3, -1, -1, -1, -1, 4, 5, 6, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 7, -1, -1, -1, 4, 4, 8, 9, -1, -1, -1, -1, -1, 5, 5, 6, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 10, -1, -1, 4, 4, 11, 9, -1, -1, -1, -1, -1, -1, -1, 12, -1, -1, -1, -1];
+        let table: Vec<i32> = vec![
+            -1, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 3, -1, -1, -1, -1, 4, 5, 6,
+            5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 7, -1, -1, -1, 4, 4, 8, 9, -1, -1, -1, -1,
+            -1, 5, 5, 6, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, 10, -1, -1, 4, 4, 11, 9, -1, -1, -1, -1, -1, -1, -1, 12, -1, -1, -1, -1,
+        ];
         assert_eq!(table, emitter.get_translation_table());
     }
 
     #[test]
     fn build_bol() {
         let mut char_classes = CharClasses::new(1114111);
-        let (ir1, _, _) = parse_regex2(0, &"^abc   {block}".to_string(), &mut char_classes).unwrap();
-        let (ir2, _, _) = parse_regex2(0, &"\" \"  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir1, _, _) =
+            parse_regex2(0, &"^abc   {block}".to_string(), &mut char_classes).unwrap();
+        let (ir2, _, _) =
+            parse_regex2(0, &"\" \"  {block}".to_string(), &mut char_classes).unwrap();
 
         let est_size = (get_nfa_size(&ir1) + get_nfa_size(&ir2)) * 2;
         let num_lex = 1usize;
@@ -2068,12 +2305,16 @@ rankdir = LR
     #[test]
     fn build_bol2() {
         let mut char_classes = CharClasses::new(1114111);
-        let (ir1, _, _) = parse_regex2(0, &"^abc   {block}".to_string(), &mut char_classes).unwrap();
-        let (ir2, _, _) = parse_regex2(0, &"[a-z]+  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir1, _, _) =
+            parse_regex2(0, &"^abc   {block}".to_string(), &mut char_classes).unwrap();
+        let (ir2, _, _) =
+            parse_regex2(0, &"[a-z]+  {block}".to_string(), &mut char_classes).unwrap();
         let (ir3, _, _) = parse_regex2(0, &"\\n  {block}".to_string(), &mut char_classes).unwrap();
-        let (ir4, _, _) = parse_regex2(0, &"\" \"  {block}".to_string(), &mut char_classes).unwrap();
+        let (ir4, _, _) =
+            parse_regex2(0, &"\" \"  {block}".to_string(), &mut char_classes).unwrap();
 
-        let est_size = (get_nfa_size(&ir1) + get_nfa_size(&ir2) + get_nfa_size(&ir3) + get_nfa_size(&ir4)) * 2;
+        let est_size =
+            (get_nfa_size(&ir1) + get_nfa_size(&ir2) + get_nfa_size(&ir3) + get_nfa_size(&ir4)) * 2;
         let num_lex = 1usize;
         let mut nfa: NFA = NFA::new_with_lex(num_lex, est_size, char_classes);
         let action1 = Action::num(1);
@@ -2093,7 +2334,10 @@ rankdir = LR
             let row: Vec<i32> = vec![0, 7, 14, 21, 14, 28, 35, 21];
             assert_eq!(row, emitter.get_row_map());
 
-            let table: Vec<i32> = vec![-1, 2, 3, 3, 3, 3, 4, -1, 2, 5, 3, 3, 3, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, 3, 3, 3, 3, -1, -1, -1, 3, 6, 3, 3, -1, -1, -1, 3, 3, 7, 3, -1];
+            let table: Vec<i32> = vec![
+                -1, 2, 3, 3, 3, 3, 4, -1, 2, 5, 3, 3, 3, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, 3,
+                3, 3, 3, -1, -1, -1, 3, 6, 3, 3, -1, -1, -1, 3, 3, 7, 3, -1,
+            ];
             assert_eq!(table, emitter.get_translation_table());
 
             let attr: Vec<i32> = vec![0, 0, 9, 1, 9, 1, 1, 1];
@@ -2110,8 +2354,10 @@ rankdir = LR
     #[test]
     fn eof_1() {
         let mut char_classes = CharClasses::new(127);
-        let (_ir1, _block1, s1) = parse_regex2(0, &"<<EOF>>  {block}".to_string(), &mut char_classes).unwrap();
-        let (_ir2, _block2, s2) = parse_regex2(0, &"<NEXT><<EOF>>  {block}".to_string(), &mut char_classes).unwrap();
+        let (_ir1, _block1, s1) =
+            parse_regex2(0, &"<<EOF>>  {block}".to_string(), &mut char_classes).unwrap();
+        let (_ir2, _block2, s2) =
+            parse_regex2(0, &"<NEXT><<EOF>>  {block}".to_string(), &mut char_classes).unwrap();
         assert_eq!(s1, "");
         assert_eq!(s2, "NEXT");
     }

@@ -17,7 +17,7 @@ impl DFA {
     pub const NO_TARGET: i32 = -1;
 
     pub fn new(num_entry_states: usize, num_input: usize, num_lex_states: usize) -> DFA {
-        const STATES: usize = 500;    // number of initial states
+        const STATES: usize = 500; // number of initial states
         let mut entry_states: Vec<i32> = vec![];
         let mut is_final: Vec<bool> = vec![];
         let mut action: Vec<Action> = vec![];
@@ -100,36 +100,47 @@ impl DFA {
     pub fn minimize(&mut self) {
         let N: usize = self.num_states + 1;
 
-        let mut block: Vec<i32> = vec![]; block.resize(N * 2, 0);
+        let mut block: Vec<i32> = vec![];
+        block.resize(N * 2, 0);
 
-        let mut b_forward: Vec<i32> = vec![]; b_forward.resize(N * 2, 0);
-        let mut b_backward: Vec<i32> = vec![]; b_backward.resize(N * 2, 0);
+        let mut b_forward: Vec<i32> = vec![];
+        b_forward.resize(N * 2, 0);
+        let mut b_backward: Vec<i32> = vec![];
+        b_backward.resize(N * 2, 0);
 
         let mut last_block: usize = N;
         let B0: usize = N;
 
-
-        let mut l_forward: Vec<i32> = vec![]; l_forward.resize(N * self.num_input + 1, 0);
-        let mut l_backward: Vec<i32> = vec![]; l_backward.resize(N * self.num_input + 1, 0);
+        let mut l_forward: Vec<i32> = vec![];
+        l_forward.resize(N * self.num_input + 1, 0);
+        let mut l_backward: Vec<i32> = vec![];
+        l_backward.resize(N * self.num_input + 1, 0);
         let anchor_L: usize = N * self.num_input;
 
-        let mut inv_table: Vec<i32> = vec![]; inv_table.resize(self.num_input, 0);
-        let mut inv_delta: Vec<Vec<i32>> = vec![]; inv_delta.resize(N, inv_table); // inv_table is used only here
-        let mut inv_delta_set: Vec<i32> = vec![]; inv_delta_set.resize(N * self.num_input * 2, 0);
+        let mut inv_table: Vec<i32> = vec![];
+        inv_table.resize(self.num_input, 0);
+        let mut inv_delta: Vec<Vec<i32>> = vec![];
+        inv_delta.resize(N, inv_table); // inv_table is used only here
+        let mut inv_delta_set: Vec<i32> = vec![];
+        inv_delta_set.resize(N * self.num_input * 2, 0);
 
-        let mut twin: Vec<i32> = vec![]; twin.resize(N * 2, 0);
+        let mut twin: Vec<i32> = vec![];
+        twin.resize(N * 2, 0);
         let mut num_split: usize;
 
-        let mut SD: Vec<i32> = vec![]; SD.resize(N * 2, 0);
+        let mut SD: Vec<i32> = vec![];
+        SD.resize(N * 2, 0);
 
         // for fixed (B_j,a), the D[0]..D[numD-1] are the inv_delta(B_j,a)
-        let mut D: Vec<i32> = vec![]; D.resize(N, 0);
+        let mut D: Vec<i32> = vec![];
+        D.resize(N, 0);
         let mut num_D: i32;
 
-
         let mut last_delta: usize = 0;
-        let mut inv_lists: Vec<i32> = vec![]; inv_lists.resize(N, 0);   // holds a set of lists of states
-        let mut inv_list_last: Vec<i32> = vec![]; inv_list_last.resize(N, 0);   // the last element
+        let mut inv_lists: Vec<i32> = vec![];
+        inv_lists.resize(N, 0); // holds a set of lists of states
+        let mut inv_list_last: Vec<i32> = vec![];
+        inv_list_last.resize(N, 0); // the last element
         for c in 0..self.num_input {
             // clear "head" and "last element" pointers
             for s in 0..N {
@@ -155,18 +166,20 @@ impl DFA {
             // now move them to inv_delta_set in sequential order,
             // and update inv_delta accordingly
             for s in 0..N {
-                let mut i: i32 = inv_delta[s][c]; inv_delta[s][c] = last_delta as i32;
+                let mut i: i32 = inv_delta[s][c];
+                inv_delta[s][c] = last_delta as i32;
                 let k: i32 = inv_list_last[s];
                 let mut go_on = i != -1;
                 while go_on {
                     go_on = i != k;
-                    inv_delta_set[last_delta] = i; last_delta += 1;
+                    inv_delta_set[last_delta] = i;
+                    last_delta += 1;
                     i = inv_lists[i as usize];
                 }
                 inv_delta_set[last_delta] = -1;
                 last_delta += 1;
             }
-        }   // of initialize inv_delta
+        } // of initialize inv_delta
 
         // initialize blocks
         // make B0 = {0} where 0 = the additional error state
@@ -184,7 +197,8 @@ impl DFA {
                 let t = b_forward[b] as usize;
 
                 found = if self.is_final[s - 1] {
-                    self.is_final[t - 1] && (self.action[s - 1].content == self.action[t - 1].content)
+                    self.is_final[t - 1]
+                        && (self.action[s - 1].content == self.action[t - 1].content)
                 } else {
                     !self.is_final[t - 1]
                 };
@@ -216,7 +230,7 @@ impl DFA {
 
                 last_block += 1;
             }
-        }   // of initialize blocks
+        } // of initialize blocks
 
         // initialize worklist L
         // first, find the largest block B_max, then, all other (B_i,c) go into the list
@@ -236,7 +250,7 @@ impl DFA {
         } else {
             B_i = B0;
         }
-        let mut index = (B_i - B0) * self.num_input;    // (B_i, 0)
+        let mut index = (B_i - B0) * self.num_input; // (B_i, 0)
         while index < ((B_i + 1 - B0) * self.num_input) {
             let last = l_backward[anchor_L] as usize;
             l_forward[last] = index as i32;
@@ -309,8 +323,10 @@ impl DFA {
                 if SD[B_i] < 0 {
                     SD[B_i] = 0;
                     let mut t: usize = b_forward[B_i] as usize;
-                    while t != B_i && (t != 0 || block[0] as usize == B_j) &&
-                        (t == 0 || block[(self.table[t - 1][a] + 1) as usize] as usize == B_j) {
+                    while t != B_i
+                        && (t != 0 || block[0] as usize == B_j)
+                        && (t == 0 || block[(self.table[t - 1][a] + 1) as usize] as usize == B_j)
+                    {
                         SD[B_i] += 1;
                         t = b_forward[t] as usize;
                     }
@@ -354,9 +370,9 @@ impl DFA {
                     block[B_k] += 1;
                     block[B_i] -= 1;
 
-                    SD[B_i] -= 1;   // there is now one state less in B_i that goes with a into B_
+                    SD[B_i] -= 1; // there is now one state less in B_i that goes with a into B_
                 }
-            }   // end of splitting
+            } // end of splitting
 
             // update L
             for index_twin in 0..num_split {
@@ -394,14 +410,17 @@ impl DFA {
         // transform the transition table
         // trans[i] is the state j that will replace state i, i.e._
         // states i and j are equivalent
-        let mut trans: Vec<i32> = vec![]; trans.resize(self.num_states, 0);
+        let mut trans: Vec<i32> = vec![];
+        trans.resize(self.num_states, 0);
 
         // kill[i] is true iff state i is redundant and can be removed
-        let mut kill: Vec<bool> = vec![]; kill.resize(self.num_states, false);
+        let mut kill: Vec<bool> = vec![];
+        kill.resize(self.num_states, false);
 
         // move[i] is the amount line i has to be moved in the transition table
         // (because states j < i have been removed)
-        let mut move_: Vec<i32> = vec![]; move_.resize(self.num_states, 0);
+        let mut move_: Vec<i32> = vec![];
+        move_.resize(self.num_states, 0);
 
         // fill arrays trans[] and kill[] (in O(n))
         for b in (B0 + 1)..(last_block + 1) {
@@ -440,8 +459,8 @@ impl DFA {
             }
             for c in 0..self.num_input {
                 if self.table[i][c] >= 0 {
-                    self.table[k][c] = trans[ self.table[i][c] as usize ];
-                    self.table[k][c] -= move_[ self.table[k][c] as usize ];
+                    self.table[k][c] = trans[self.table[i][c] as usize];
+                    self.table[k][c] -= move_[self.table[k][c] as usize];
                 } else {
                     self.table[k][c] = self.table[i][c];
                 }
@@ -453,8 +472,8 @@ impl DFA {
         }
         self.num_states = k;
         for i in 0..self.entry_states.len() {
-            self.entry_states[i] = trans[ self.entry_states[i] as usize ];
-            self.entry_states[i] -= move_[ self.entry_states[i] as usize ];
+            self.entry_states[i] = trans[self.entry_states[i] as usize];
+            self.entry_states[i] -= move_[self.entry_states[i] as usize];
         }
     }
 

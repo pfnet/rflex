@@ -8,10 +8,7 @@ pub struct Interval {
 
 impl Interval {
     pub fn new(start: usize, end: usize) -> Interval {
-        Interval {
-            start,
-            end,
-        }
+        Interval { start, end }
     }
 
     pub fn contains(&self, point: usize) -> bool {
@@ -51,7 +48,6 @@ impl IntCharSet {
         set
     }
 
-
     pub fn with_intervals(intervals: Vec<Interval>) -> IntCharSet {
         let mut set = IntCharSet::new();
         intervals.iter().for_each(|i| set.intervals.push(i.clone()));
@@ -85,7 +81,8 @@ impl IntCharSet {
             }
 
             if c < i.start {
-                if check == 0 { // FIXME
+                if check == 0 {
+                    // FIXME
                     return None;
                 }
                 end = check - 1;
@@ -148,9 +145,9 @@ impl IntCharSet {
                 }
                 self.intervals.remove(i);
                 size -= 1;
-            }   // end while
+            } // end while
             return;
-        }   // end loop
+        } // end loop
 
         self.intervals.push(interval.clone());
     }
@@ -298,7 +295,8 @@ impl IntCharSet {
             }
 
             self.intervals[i].start = y.end + 1;
-            self.intervals.insert(i, Interval::new(x.start, y.start - 1));
+            self.intervals
+                .insert(i, Interval::new(x.start, y.start - 1));
 
             i += 1;
             k += 1;
@@ -358,7 +356,10 @@ impl fmt::Display for Interval {
 
 impl fmt::Display for CharClassInterval {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_fmt(format_args!("[{}-{}={}]", self.start, self.end, self.char_class))
+        formatter.write_fmt(format_args!(
+            "[{}-{}={}]",
+            self.start, self.end, self.char_class
+        ))
     }
 }
 
@@ -557,8 +558,16 @@ mod tests {
     fn char_classes_intervals() {
         let mut char_classes = CharClasses::new(127);
         let mut result: Vec<Interval> = vec![];
-        result.append(IntCharSet::with_interval(Interval::new('a' as usize, 'z' as usize)).get_intervals().as_mut());
-        result.append(IntCharSet::with_interval(Interval::new('A' as usize, 'Z' as usize)).get_intervals().as_mut());
+        result.append(
+            IntCharSet::with_interval(Interval::new('a' as usize, 'z' as usize))
+                .get_intervals()
+                .as_mut(),
+        );
+        result.append(
+            IntCharSet::with_interval(Interval::new('A' as usize, 'Z' as usize))
+                .get_intervals()
+                .as_mut(),
+        );
         char_classes.make_class_intervals(result.clone(), false);
         println!("{}", char_classes);
     }

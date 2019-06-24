@@ -1,12 +1,14 @@
-mod scanner;
-mod nfa;
-mod dfa;
-mod codegen;
-mod charclasses;
-use crate::scanner::Scanner;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
+
+use crate::scanner::Scanner;
+
+mod charclasses;
+mod codegen;
+mod dfa;
+mod nfa;
+mod scanner;
 
 pub fn process(path: String) -> Result<(), std::io::Error> {
     let f = File::open(path.clone())?;
