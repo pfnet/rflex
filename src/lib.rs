@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::scanner::Scanner;
 
@@ -10,8 +10,8 @@ mod dfa;
 mod nfa;
 mod scanner;
 
-pub fn process(path: String) -> Result<(), std::io::Error> {
-    let f = File::open(path.clone())?;
+pub fn process<T: AsRef<Path>>(path: T, output: Option<T>) -> Result<(), std::io::Error> {
+    let f = File::open(path.as_ref())?;
     let mut reader = BufReader::new(f);
     let mut scanner = Scanner::new(&mut reader);
     if let Err(_) = scanner.scan() {
@@ -20,15 +20,13 @@ pub fn process(path: String) -> Result<(), std::io::Error> {
 
     scanner.build();
 
-    let path = Path::new(path.as_str());
-    let path = path.with_extension("rs");
-    let path_str = path.to_str();
-    if path_str.is_none() {
-        eprintln!("Cannot get path string for output");
-        std::process::exit(1);
-    }
+    let path = if let Some(p) = output {
+        PathBuf::from(p.as_ref())
+    } else {
+        path.as_ref().with_extension("rs")
+    };
 
-    let file = File::create(path_str.unwrap())?;
+    let file = File::create(path)?;
     let mut writer = BufWriter::new(file);
     scanner.generate(&mut writer)?;
     Ok(())
