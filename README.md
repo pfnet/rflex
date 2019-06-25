@@ -29,8 +29,7 @@ use std::path::Path;
 
 fn main() {
     let path = Path::new("src").join("target.l");
-    let path = path.to_str().unwrap().to_string();
-    if let Err(e) = rflex::process(path) {
+    if let Err(e) = rflex::process(path, None) {
         eprintln!("{}", e);
         std::process::exit(1);
     }

@@ -1,4 +1,7 @@
-pub mod test;
+mod test {
+    include!(concat!(env!("OUT_DIR"), "/test.rs"));
+}
+
 fn main() {
     let s = "abc ab hoge fuga \nabc a a \nbcd \n abc abdef";
     //let s = "abc !".to_string();  // match unmatch
