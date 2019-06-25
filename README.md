@@ -25,11 +25,14 @@ rflex = "0.4"
 
 ```rust
 extern crate rflex;
+use std::env;
 use std::path::Path;
 
 fn main() {
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let dest = Path::new(&out_dir).join("target.rs");
     let path = Path::new("src").join("target.l");
-    if let Err(e) = rflex::process(path, None) {
+    if let Err(e) = rflex::process(path, Some(dest)) {
         eprintln!("{}", e);
         std::process::exit(1);
     }
