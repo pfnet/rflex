@@ -1,11 +1,12 @@
 // BNF of regular expression: https://qiita.com/kmizu/items/d574e84c91ba240b1a1f
 
+use core::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
 use std::fs::File;
-use std::io::Write;
 use std::io::{BufRead, BufWriter};
+use std::io::Write;
 use std::iter::Peekable;
 use std::slice::Iter;
 use std::str::Chars;
@@ -14,7 +15,6 @@ use crate::charclasses::{CharClasses, IntCharSet, Interval};
 use crate::codegen::{CodeGen, Emitter};
 use crate::error::{Error, ErrorKind};
 use crate::nfa::NFA;
-use core::borrow::{Borrow, BorrowMut};
 
 type Pattern = Vec<Ast>;
 

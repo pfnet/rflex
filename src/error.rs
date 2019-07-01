@@ -1,7 +1,9 @@
-use crate::scanner::{CharClassParseError, TranslateError};
-use failure::{Backtrace, Context, Fail};
 use std::fmt;
 use std::fmt::Display;
+
+use failure::{Backtrace, Context, Fail};
+
+use crate::scanner::{CharClassParseError, TranslateError};
 
 #[derive(Fail, Debug)]
 pub enum ErrorKind {
