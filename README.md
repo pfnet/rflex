@@ -20,6 +20,7 @@ build = "build.rs"
 
 [build-dependencies]
 # ...
+failure = "0.1.5"
 rflex = "0.4"
 ```
 
@@ -33,7 +34,9 @@ fn main() {
     let dest = Path::new(&out_dir).join("target.rs");
     let path = Path::new("src").join("target.l");
     if let Err(e) = rflex::process(path, Some(dest)) {
-        eprintln!("{}", e);
+        for cause in failure::Fail::iter_chain(&e) {
+            eprintln!("{}: {}", cause.name().unwrap_or("Error"), cause);
+        }
         std::process::exit(1);
     }
 }
