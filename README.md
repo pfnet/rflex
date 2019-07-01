@@ -68,3 +68,4 @@ These libraries are used only rflex lexer generator, generated code doesn't depe
   * Copyright (c) 2015-2017
 * [liquid](https://github.com/cobalt-org/liquid-rust) released under MIT License
   * Copyright (c) 2014 cobalt-org
+* [failure](https://github.com/rust-lang-nursery/failure) released under MIT License
