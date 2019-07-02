@@ -1,17 +1,19 @@
 // BNF of regular expression: https://qiita.com/kmizu/items/d574e84c91ba240b1a1f
 
+use core::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
 use std::fs::File;
-use std::io::Write;
 use std::io::{BufRead, BufWriter};
+use std::io::Write;
 use std::iter::Peekable;
 use std::slice::Iter;
 use std::str::Chars;
 
 use crate::charclasses::{CharClasses, IntCharSet, Interval};
 use crate::codegen::{CodeGen, Emitter};
+use crate::error::{Error, ErrorKind};
 use crate::nfa::NFA;
 
 type Pattern = Vec<Ast>;
@@ -42,12 +44,18 @@ pub enum Ast {
     EOF,
 }
 
-#[derive(Debug)]
-pub enum PatternError {
+#[derive(Debug, Copy, Clone)]
+pub enum CharClassParseError {
     PatternParseError,
     LiteralError,
     ConditionError,
     CharClassError,
+}
+
+impl fmt::Display for CharClassParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", *self)
+    }
 }
 
 #[derive(Debug)]
@@ -84,18 +92,21 @@ impl<R: BufRead> Scanner<R> {
         }
     }
 
-    pub fn scan(&mut self) -> Result<(), ()> {
+    pub fn scan(&mut self) -> Result<(), Error> {
         if let Err(e) = self.parse_definitions() {
-            eprintln!("Error in parsing definitions block: {}", e);
-            return Err(());
+            return Err(Error::from(ErrorKind::DSLParse {
+                position: "definitions block".to_string(),
+                message: e.to_string(),
+            }));
         }
         if let Err(e) = self.parse_rules() {
-            eprintln!("Error in parsing rules: {}", e);
-            return Err(());
+            return Err(e);
         }
         if let Err(e) = self.parse_user_code() {
-            eprintln!("Error in parsing user codes: {}", e);
-            return Err(());
+            return Err(Error::from(ErrorKind::DSLParse {
+                position: "user codes".to_string(),
+                message: e.to_string(),
+            }));
         }
         Ok(())
     }
@@ -120,13 +131,19 @@ impl<R: BufRead> Scanner<R> {
 
         Ok(())
     }
-    fn parse_rules(&mut self) -> Result<(), &str> {
+
+    fn parse_rules(&mut self) -> Result<(), Error> {
         let mut continue_action = false;
         loop {
             let mut line = String::new();
             let res = self.input.read_line(&mut line);
             match res {
-                Ok(0) => return Err("reached end of file"),
+                Ok(0) => {
+                    return Err(Error::from(ErrorKind::DSLParse {
+                        position: "rules".to_string(),
+                        message: "reached end of file".to_string(),
+                    }))
+                }
                 Ok(_) => {
                     self.line_num += 1;
                     if (line.starts_with(' ') || line.starts_with('\t')) && continue_action {
@@ -153,9 +170,12 @@ impl<R: BufRead> Scanner<R> {
                         match key {
                             "%field" => {
                                 if splits.len() < 3 {
-                                    return Err(
-                                        "unmatch field type that expected `<type> <field_name>`",
-                                    );
+                                    return Err(Error::from(ErrorKind::DSLParse {
+                                        position: "%fields".to_string(),
+                                        message:
+                                            "unmatch field type that expected `<type> <field_name>`"
+                                                .to_string(),
+                                    }));
                                 }
                                 self.fields.push((value.to_string(), splits[2].to_string()));
                             }
@@ -184,13 +204,27 @@ impl<R: BufRead> Scanner<R> {
                             self.lex_states.push(state);
                             continue_action = true;
                         }
-                        Err(msg) => {
-                            eprintln!("parse error: {} at {} line", msg, self.line_num);
-                            return Err("failed to parse regular expression rule");
+                        Err(err) => {
+                            // Insert line_num position when err is TranslateError or CharClassParseError
+                            return Err(match err.kind() {
+                                ErrorKind::RegexTranslate { error: e, line: _ } => {
+                                    Error::from(ErrorKind::RegexTranslate {
+                                        error: *e,
+                                        line: self.line_num,
+                                    })
+                                }
+                                ErrorKind::RegexCharClass { error: e, line: _ } => {
+                                    Error::from(ErrorKind::RegexCharClass {
+                                        error: *e,
+                                        line: self.line_num,
+                                    })
+                                }
+                                _ => err,
+                            });
                         }
                     }
                 }
-                Err(..) => return Err("unexpected error to read line"),
+                Err(e) => return Err(Error::from(ErrorKind::Io { error: e })),
             }
         }
 
@@ -258,7 +292,7 @@ impl<R: BufRead> Scanner<R> {
         }
 
         if self.actions.len() == 0 {
-            eprintln!("number of actions is 0. rflex don't generate code.");
+            // number of actions is 0. rflex don't generate code.
             return Ok(());
         }
 
@@ -321,8 +355,7 @@ impl<'a, 'b> RegexScanner<'a, 'b> {
         self.char_classes.clone()
     }
 
-    pub fn scan(&mut self) -> Result<(Vec<Ast>, String, String), PatternError> {
-        use std::borrow::BorrowMut;
+    pub fn scan(&mut self) -> Result<(Vec<Ast>, String, String), CharClassParseError> {
         let chars = self.chars.borrow_mut();
         let mut pat: Pattern = Pattern::new();
         let mut state_name = String::new(); // empty ("") is initial state
@@ -342,17 +375,19 @@ impl<'a, 'b> RegexScanner<'a, 'b> {
                         return Ok((pat, code, state_name));
                     } else {
                         // expected EOF
-                        return Err(PatternError::ConditionError);
+                        return Err(CharClassParseError::ConditionError);
                     }
                 }
                 loop {
-                    state_name.push(match chars.next().ok_or(PatternError::ConditionError)? {
-                        ch if ch.is_ascii_uppercase() => ch,
-                        '>' => break,
-                        _ => {
-                            return Err(PatternError::ConditionError);
-                        }
-                    });
+                    state_name.push(
+                        match chars.next().ok_or(CharClassParseError::ConditionError)? {
+                            ch if ch.is_ascii_uppercase() => ch,
+                            '>' => break,
+                            _ => {
+                                return Err(CharClassParseError::ConditionError);
+                            }
+                        },
+                    );
                 }
             }
             _ => (),
@@ -382,11 +417,13 @@ impl<'a, 'b> RegexScanner<'a, 'b> {
                     let mut str_lit = String::new();
                     // get Literal
                     loop {
-                        str_lit.push(match chars.next().ok_or(PatternError::LiteralError)? {
-                            '\\' => chars.next().ok_or(PatternError::LiteralError)?,
-                            '\"' => break,
-                            ch => ch,
-                        })
+                        str_lit.push(
+                            match chars.next().ok_or(CharClassParseError::LiteralError)? {
+                                '\\' => chars.next().ok_or(CharClassParseError::LiteralError)?,
+                                '\"' => break,
+                                ch => ch,
+                            },
+                        )
                     }
                     self.char_classes.make_class_str(str_lit.clone(), false);
                     Ast::StringLiteral(str_lit)
@@ -407,10 +444,12 @@ impl<'a, 'b> RegexScanner<'a, 'b> {
                     };
                     let mut str_capture = String::new();
                     loop {
-                        str_capture.push(match chars.next().ok_or(PatternError::LiteralError)? {
-                            ']' => break,
-                            ch => ch,
-                        })
+                        str_capture.push(
+                            match chars.next().ok_or(CharClassParseError::LiteralError)? {
+                                ']' => break,
+                                ch => ch,
+                            },
+                        )
                     }
                     let v: Vec<Interval> = convert_char_class(str_capture)?;
                     self.char_classes.make_class_intervals(v.clone(), false);
@@ -472,7 +511,7 @@ impl<'a, 'b> RegexScanner<'a, 'b> {
                     {
                         Ast::Letter(ch)
                     }
-                    _ => return Err(PatternError::LiteralError),
+                    _ => return Err(CharClassParseError::LiteralError),
                 },
                 Some(ch) => {
                     self.char_classes.make_class_char(ch as usize, false);
@@ -487,9 +526,9 @@ impl<'a, 'b> RegexScanner<'a, 'b> {
     }
 }
 
-fn convert_char_class(char_class: String) -> Result<Vec<Interval>, PatternError> {
+fn convert_char_class(char_class: String) -> Result<Vec<Interval>, CharClassParseError> {
     if char_class.is_empty() {
-        return Err(PatternError::CharClassError);
+        return Err(CharClassParseError::CharClassError);
     }
 
     let mut char_set = IntCharSet::new();
@@ -508,7 +547,7 @@ fn convert_char_class(char_class: String) -> Result<Vec<Interval>, PatternError>
                 itr.next();
                 let end = itr.next();
                 if end.is_none() || end.unwrap() <= first {
-                    return Err(PatternError::CharClassError);
+                    return Err(CharClassParseError::CharClassError);
                 }
                 let begin = first as usize;
                 let end = end.unwrap() as usize;
@@ -530,7 +569,7 @@ fn convert_char_class(char_class: String) -> Result<Vec<Interval>, PatternError>
                     Some('r') => {
                         char_set.add_set(&IntCharSet::with_char('\r' as usize));
                     }
-                    _ => return Err(PatternError::CharClassError),
+                    _ => return Err(CharClassParseError::CharClassError),
                 }
             }
             _ => {
@@ -559,19 +598,12 @@ fn parse_regex2(
     line_num: usize,
     line: &String,
     char_classes: &mut CharClasses,
-) -> Result<(IR, String, String), TranslateError> {
+) -> Result<(IR, String, String), Error> {
     let mut parser = RegexScanner::new(line_num, line, char_classes);
-    let scan_res = parser.scan();
-    if scan_res.is_err() {
-        return Err(TranslateError::PatternParseError);
-    }
-    let (ast, code, state) = scan_res.unwrap();
+    let (ast, code, state) = parser.scan()?;
     let translator = Translator::new();
-    let ir = translator.translate(&ast);
-    if ir.is_err() {
-        return Err(ir.unwrap_err());
-    }
-    Ok((ir.unwrap(), code, state))
+    let ir = translator.translate(&ast)?;
+    Ok((ir, code, state))
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -618,7 +650,7 @@ pub enum RepetitionKind {
     OneOrMore,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum TranslateError {
     PatternParseError,
     IllegalSyntaxExpr,
@@ -684,12 +716,12 @@ impl Translator {
         Translator {}
     }
 
-    pub fn translate(&self, pat: &Pattern) -> Result<IR, TranslateError> {
+    pub fn translate(&self, pat: &Pattern) -> Result<IR, Error> {
         let mut iter = pat.iter().peekable();
         self.eat_expression(&mut iter)
     }
 
-    fn eat_expression(&self, iter: &mut Peekable<Iter<Ast>>) -> Result<IR, TranslateError> {
+    fn eat_expression(&self, iter: &mut Peekable<Iter<Ast>>) -> Result<IR, Error> {
         let first = self.eat_sequence(iter)?;
         let mut list: Vec<IR> = vec![first];
 
@@ -700,7 +732,12 @@ impl Translator {
                     iter.next(); /* continue */
                 }
                 Some(&Ast::PEnd) | None => break, // break and skip to call iter.next()
-                _ => return Err(TranslateError::IllegalSyntaxExpr),
+                _ => {
+                    return Err(Error::from(ErrorKind::RegexTranslate {
+                        error: TranslateError::IllegalSyntaxExpr,
+                        line: 0usize,
+                    }))
+                }
             }
 
             let next_expr = self.eat_sequence(iter)?;
@@ -708,7 +745,10 @@ impl Translator {
         }
 
         match list.len() {
-            0 => Err(TranslateError::IllegalSyntaxExpr),
+            0 => Err(Error::from(ErrorKind::RegexTranslate {
+                error: TranslateError::IllegalSyntaxExpr,
+                line: 0usize,
+            })),
             1 => Ok(list.first().unwrap().clone()),
             _ => Ok(IR {
                 kind: IRKind::Alternation(list),
@@ -716,7 +756,7 @@ impl Translator {
         }
     }
 
-    fn eat_sequence(&self, iter: &mut Peekable<Iter<Ast>>) -> Result<IR, TranslateError> {
+    fn eat_sequence(&self, iter: &mut Peekable<Iter<Ast>>) -> Result<IR, Error> {
         let suffix = self.eat_suffix(iter)?;
         let mut list: Vec<IR> = vec![suffix];
 
@@ -730,7 +770,10 @@ impl Translator {
             list.push(suffix);
         }
         match list.len() {
-            0 => Err(TranslateError::IllegalSyntaxSequence),
+            0 => Err(Error::from(ErrorKind::RegexTranslate {
+                error: TranslateError::IllegalSyntaxSequence,
+                line: 0usize,
+            })),
             1 => Ok(list.first().unwrap().clone()),
             _ => Ok(IR {
                 kind: IRKind::Concat(list),
@@ -738,7 +781,7 @@ impl Translator {
         }
     }
 
-    fn eat_suffix(&self, iter: &mut Peekable<Iter<Ast>>) -> Result<IR, TranslateError> {
+    fn eat_suffix(&self, iter: &mut Peekable<Iter<Ast>>) -> Result<IR, Error> {
         let primary = self.eat_primary(iter)?;
         let next = iter.peek().map(|&c| c);
 
@@ -770,10 +813,15 @@ impl Translator {
         }
     }
 
-    fn eat_primary(&self, iter: &mut Peekable<Iter<Ast>>) -> Result<IR, TranslateError> {
+    fn eat_primary(&self, iter: &mut Peekable<Iter<Ast>>) -> Result<IR, Error> {
         let first = match iter.next() {
             Some(x) => x,
-            _ => return Err(TranslateError::IllegalSyntaxPrimary),
+            _ => {
+                return Err(Error::from(ErrorKind::RegexTranslate {
+                    error: TranslateError::IllegalSyntaxPrimary,
+                    line: 0usize,
+                }))
+            }
         };
         Ok(match first {
             Ast::BeginOfLine => {
@@ -799,13 +847,23 @@ impl Translator {
                 let expr = self.eat_expression(iter)?;
                 match iter.next() {
                     Some(&Ast::PEnd) => (),
-                    _ => return Err(TranslateError::IllegalSyntaxPrimary),
+                    _ => {
+                        return Err(Error::from(ErrorKind::RegexTranslate {
+                            error: TranslateError::IllegalSyntaxPrimary,
+                            line: 0usize,
+                        }))
+                    }
                 }
                 IR {
                     kind: IRKind::Group(Box::new(expr)),
                 }
             }
-            _ => return Err(TranslateError::IllegalSyntaxPrimary),
+            _ => {
+                return Err(Error::from(ErrorKind::RegexTranslate {
+                    error: TranslateError::IllegalSyntaxPrimary,
+                    line: 0usize,
+                }))
+            }
         })
     }
 }

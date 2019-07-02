@@ -8,8 +8,8 @@ use std::rc::Rc;
 use crate::charclasses::CharClasses;
 use crate::charclasses::Interval;
 use crate::dfa::DFA;
+use crate::scanner::{Action, IR, IRKind};
 use crate::scanner::RepetitionKind;
-use crate::scanner::{Action, IRKind, IR};
 
 use self::fixedbitset::FixedBitSet;
 
