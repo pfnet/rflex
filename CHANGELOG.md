@@ -1,3 +1,9 @@
+## 0.5.0 (2019-07-05)
+
+* Change process arguments by dalance ([#9](https://github.com/pfnet/rflex/pull/9))
+  * This enables `process` to specify output directory and improves type of Path
+* Use failure ([#6](https://github.com/pfnet/rflex/issues/6), [#10](https://github.com/pfnet/rflex/pull/10))
+  * This introduces `failure::Error` to `process` function
 
 ## 0.4.0 (2019-06-19)
 
