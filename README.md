@@ -21,7 +21,7 @@ build = "build.rs"
 [build-dependencies]
 # ...
 failure = "0.1.5"
-rflex = "0.4"
+rflex = "0.5"
 ```
 
 ```rust
