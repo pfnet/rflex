@@ -297,6 +297,8 @@ impl<'a> CodeGen<'a> {
 
         let template = liquid::ParserBuilder::with_liquid().build().parse(
             r#"
+use std::collections::HashMap;
+
 #[derive(Debug)]
 pub enum Error {
     EOF,
@@ -305,6 +307,7 @@ pub enum Error {
 
 pub struct {{lexer_name}}<'a> {
     cmap: Vec<usize>,
+    cmap2: HashMap<usize, usize>,
     start: std::str::Chars<'a>,
     current: std::str::Chars<'a>,
     max_len: usize,
@@ -333,12 +336,14 @@ impl<'a> {{lexer_name}}<'a> {
     pub fn new(input: &'a str{{ fields_args }}) -> {{lexer_name}}<'a> {
         let max_len = input.chars().clone().count();
         let chars = input.chars();
-        let mut cmap: Vec<usize> = Vec::with_capacity(0x110000);
-        cmap.resize(0x110000, 0);
+        let mut cmap: Vec<usize> = Vec::with_capacity(256);
+        cmap.resize(256, 0);
+        let mut cmap2: HashMap<usize, usize> = HashMap::new();
 {{cmap_values}}
 
         {{lexer_name}} {
             cmap,
+            cmap2,
             start: chars.clone(),
             current: chars.clone(),
 {{ previous_init }}
@@ -434,7 +439,12 @@ impl<'a> {{lexer_name}}<'a> {
                     }
                 }
 
-                let idx = {{lexer_name}}::ZZ_ROW[self.zz_state] + self.cmap[zz_input as usize];
+                let cidx = if zz_input <= 0xFF {
+                    self.cmap[zz_input as usize]
+                } else {
+                    *self.cmap2.get(&(zz_input as usize)).unwrap_or(&0usize)
+                };
+                let idx = {{lexer_name}}::ZZ_ROW[self.zz_state] + cidx;
                 let zz_next = {{lexer_name}}::ZZ_TRANS[idx];
                 if zz_next == -1 {
                     break 'zz_for_action;
@@ -721,7 +731,11 @@ impl<'a> {{lexer_name}}<'a> {
             }
 
             for i in interval.start..(interval.end + 1) {
-                let s = format!("        cmap[{}] = {};\n", i, col_map[class]);
+                let s = if i <= 0xFF {
+                    format!("        cmap[{}] = {};\n", i, col_map[class])
+                } else {
+                    format!("        cmap2.insert({}, {});\n", i, col_map[class])
+                };
                 cmap_values.push_str(s.as_str());
             }
         }
