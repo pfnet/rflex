@@ -1,3 +1,7 @@
+## 0.6.0 (2020-02-17)
+
+* Fix to reduce huge memory allocation in lexer ([#11](https://github.com/pfnet/rflex/issues/11)
+
 ## 0.5.0 (2019-07-05)
 
 * Change process arguments by dalance ([#9](https://github.com/pfnet/rflex/pull/9))
