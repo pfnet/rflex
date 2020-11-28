@@ -397,6 +397,13 @@ impl<'a> {{lexer_name}}<'a> {
         }
     }
 
+    pub fn yytextpos(&self) -> std::ops::Range<usize> {
+        std::ops::Range {
+            start: self.zz_start_read,
+            end: self.zz_marked_pos,
+        }
+    }
+
     pub fn yylex(&mut self) -> Result<{{result_type}}, Error> {
         let mut zz_input: i32;
 
