@@ -1417,6 +1417,15 @@ rankdir = LR
         let mut l = Lexer::new(&s);
 
         assert_eq!(Ok(1i32), l.next_token());
+        let match_range = l.yytextpos();
+        assert_eq!(
+            std::ops::Range {
+                start: 0usize,
+                end: 3usize
+            },
+            match_range
+        );
+        assert_eq!("abc", &s[match_range.start..match_range.end]);
         assert_eq!(Ok(2i32), l.next_token());
         assert_eq!(Err(LexerError::EOF), l.next_token()); // EOF
         assert_eq!(true, l.is_eof());
@@ -1513,6 +1522,13 @@ rankdir = LR
                 });
             }
             text
+        }
+
+        pub fn yytextpos(&self) -> std::ops::Range<usize> {
+            std::ops::Range {
+                start: self.zz_start_read,
+                end: self.zz_marked_pos,
+            }
         }
 
         pub fn next_token(&mut self) -> Result<i32, LexerError> {
