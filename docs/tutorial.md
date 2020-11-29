@@ -56,6 +56,8 @@ For example, we can get length of accepted string by `yylength` function.
   * Return the length of accepted string.
 * `pub fn yytext(&self) -> String`
   * Return the accepted string.
+* `pub fn yytextpos(&self) -> std::ops::Range<usize>`
+  * Return the position of accepted string.
 * `pub fn yycharat(&self, pos: usize) -> Option<char>`
   * Return the character at the relative position (0-origin) in the accepted string.
 * `pub fn yypushback(&mut self, num: usize)`

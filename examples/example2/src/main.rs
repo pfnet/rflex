@@ -8,6 +8,7 @@ fn main() {
     let mut lex = test::Lexer::new(&s);
     loop {
         let res = lex.yylex();
+        println!("match range: {:?}", lex.yytextpos());
         println!("{:?}", res);
         if res.is_err() {
             break;
