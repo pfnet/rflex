@@ -1,3 +1,8 @@
+## 0.7.0 (2020-11-29)
+
+* Add yytextpos function to lexer ([#13](https://github.com/pfnet/rflex/issues/13)
+* Make enum Error derive PartialEq in lexer for convenience
+
 ## 0.6.0 (2020-02-17)
 
 * Fix to reduce huge memory allocation in lexer ([#11](https://github.com/pfnet/rflex/issues/11)
