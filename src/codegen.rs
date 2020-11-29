@@ -299,7 +299,7 @@ impl<'a> CodeGen<'a> {
             r#"
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     EOF,
     Unmatch,
