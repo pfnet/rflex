@@ -871,6 +871,7 @@ impl Translator {
 #[cfg(test)]
 mod tests {
     use std::io::BufReader;
+    use std::str::CharIndices;
 
     use super::*;
 
@@ -1425,6 +1426,14 @@ rankdir = LR
             },
             match_range
         );
+        let match_pos = l.yybytepos();
+        assert_eq!(
+            std::ops::Range {
+                start: 0usize,
+                end: 3usize
+            },
+            match_pos
+        );
         assert_eq!("abc", &s[match_range.start..match_range.end]);
         assert_eq!(Ok(2i32), l.next_token());
         assert_eq!(Err(LexerError::EOF), l.next_token()); // EOF
@@ -1450,6 +1459,8 @@ rankdir = LR
         cmap: Vec<usize>,
         start: Chars<'a>,
         current: Chars<'a>,
+        char_indices_start: CharIndices<'a>,
+        char_indices_current: CharIndices<'a>,
         max_len: usize,
 
         zz_state: usize,
@@ -1458,6 +1469,10 @@ rankdir = LR
         zz_current_pos: usize,
         zz_start_read: usize,
         zz_at_eof: bool,
+
+        zz_start_byte_read: usize,
+        zz_current_byte_pos: usize,
+        zz_marked_byte_pos: usize,
     }
 
     impl<'a> Lexer<'a> {
@@ -1488,6 +1503,8 @@ rankdir = LR
                 cmap,
                 start: chars.clone(),
                 current: chars.clone(),
+                char_indices_start: input.char_indices(),
+                char_indices_current: input.char_indices(),
                 max_len,
                 zz_state: 0,
                 zz_lexical_state: Lexer::YYINITIAL,
@@ -1495,6 +1512,9 @@ rankdir = LR
                 zz_current_pos: 0,
                 zz_start_read: 0,
                 zz_at_eof: false,
+                zz_start_byte_read: 0,
+                zz_current_byte_pos: 0,
+                zz_marked_byte_pos: 0,
             }
         }
 
@@ -1531,6 +1551,13 @@ rankdir = LR
             }
         }
 
+        pub fn yybytepos(&self) -> std::ops::Range<usize> {
+            std::ops::Range {
+                start: self.zz_start_byte_read,
+                end: self.zz_marked_byte_pos,
+            }
+        }
+
         pub fn next_token(&mut self) -> Result<i32, LexerError> {
             let mut zz_input: i32;
 
@@ -1539,11 +1566,16 @@ rankdir = LR
 
             loop {
                 let mut zz_marked_pos_l = self.zz_marked_pos;
+                let mut zz_current_byte_pos = self.zz_current_byte_pos;
+                let mut zz_marked_byte_pos = self.zz_marked_byte_pos;
                 let mut zz_action = -1;
                 let mut zz_current_pos_l = self.zz_marked_pos;
                 self.zz_start_read = self.zz_marked_pos;
                 self.zz_current_pos = self.zz_marked_pos;
+                self.zz_start_byte_read = self.zz_marked_byte_pos;
+                self.zz_current_byte_pos = self.zz_marked_byte_pos;
                 self.start = self.current.clone();
+                self.char_indices_start = self.char_indices_start.clone();
 
                 self.zz_state = Lexer::ZZ_LEXSTATE[self.zz_lexical_state] as usize;
 
@@ -1556,6 +1588,8 @@ rankdir = LR
                 'zz_for_action: loop {
                     if zz_current_pos_l < zz_end_read_l {
                         zz_input = self.current.next().unwrap() as i32;
+                        zz_current_byte_pos +=
+                            self.char_indices_current.next().unwrap().1.len_utf8();
                         zz_current_pos_l += 1;
                     } else if self.zz_at_eof {
                         zz_input = Lexer::YYEOF;
@@ -1568,6 +1602,8 @@ rankdir = LR
                             break 'zz_for_action;
                         } else {
                             zz_input = self.current.next().unwrap() as i32;
+                            zz_current_byte_pos +=
+                                self.char_indices_current.next().unwrap().1.len_utf8();
                             zz_current_pos_l += 1;
                         }
                     }
@@ -1583,6 +1619,7 @@ rankdir = LR
                     if (zz_attributes & 1) == 1 {
                         zz_action = self.zz_state as i32;
                         zz_marked_pos_l = zz_current_pos_l;
+                        zz_marked_byte_pos = zz_current_byte_pos;
                         if (zz_attributes & 8) == 8 {
                             break 'zz_for_action;
                         }
@@ -1591,6 +1628,7 @@ rankdir = LR
 
                 // store back cached position
                 self.zz_marked_pos = zz_marked_pos_l;
+                self.zz_marked_byte_pos = zz_marked_byte_pos;
 
                 if zz_input == Lexer::YYEOF && self.zz_start_read == self.zz_current_pos {
                     self.zz_at_eof = true;
