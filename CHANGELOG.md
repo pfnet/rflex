@@ -1,3 +1,8 @@
+## 0.8.0 (2021-02-05)
+
+* Add yybytepos function to lexer ([#13](https://github.com/pfnet/rflex/issues/13))
+* Remove yypushback function due to incorrect implementation
+
 ## 0.7.0 (2020-11-29)
 
 * Add yytextpos function to lexer ([#13](https://github.com/pfnet/rflex/issues/13)
