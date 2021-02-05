@@ -58,10 +58,10 @@ For example, we can get length of accepted string by `yylength` function.
   * Return the accepted string.
 * `pub fn yytextpos(&self) -> std::ops::Range<usize>`
   * Return the position of accepted string.
+* `pub fn yybytepos(&self) -> std::ops::Range<usize>`
+  * Return the byte position of accepted string. It can be used for `str`.
 * `pub fn yycharat(&self, pos: usize) -> Option<char>`
   * Return the character at the relative position (0-origin) in the accepted string.
-* `pub fn yypushback(&mut self, num: usize)`
-  * Back to `num` count for next scanning. The number must not be greater than `yylength()`.
 
 ## enum Error
 

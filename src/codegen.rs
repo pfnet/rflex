@@ -403,19 +403,6 @@ impl<'a> {{lexer_name}}<'a> {
         self.input[self.yybytepos()].to_string()
     }
 
-    pub fn yypushback(&mut self, num: usize) {
-        let text = self.yytext();
-        let mut itr = text.chars().rev();
-        if num <= self.yylength() {
-            self.zz_marked_char -= num;
-            for _ in 0..num {
-                if let Some(c) = itr.next() {
-                    self.zz_marked_pos -= c.len_utf8();
-                }
-            }
-        }
-    }
-
     pub fn yytextpos(&self) -> std::ops::Range<usize> {
         std::ops::Range {
             start: self.zz_start_read_char,
