@@ -298,6 +298,7 @@ impl<'a> CodeGen<'a> {
         let template = liquid::ParserBuilder::with_liquid().build().parse(
             r#"
 use std::collections::HashMap;
+use std::str::CharIndices;
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
@@ -306,18 +307,25 @@ pub enum Error {
 }
 
 pub struct {{lexer_name}}<'a> {
+    input: &'a str,
     cmap: Vec<usize>,
     cmap2: HashMap<usize, usize>,
-    start: std::str::Chars<'a>,
-    current: std::str::Chars<'a>,
+    start: CharIndices<'a>,
+    current: CharIndices<'a>,
     max_len: usize,
 {{ previous_def }}
 
     zz_state: usize,
     zz_lexical_state: usize,
+
+    // byte
     zz_marked_pos: usize,
     zz_current_pos: usize,
     zz_start_read: usize,
+
+    // char
+    zz_start_read_char: usize,
+    zz_marked_char: usize,
 {{ zz_bol_def }}
     zz_at_eof: bool,
 {{ fields_def }}
@@ -335,17 +343,17 @@ impl<'a> {{lexer_name}}<'a> {
 
     pub fn new(input: &'a str{{ fields_args }}) -> {{lexer_name}}<'a> {
         let max_len = input.chars().clone().count();
-        let chars = input.chars();
         let mut cmap: Vec<usize> = Vec::with_capacity(256);
         cmap.resize(256, 0);
         let mut cmap2: HashMap<usize, usize> = HashMap::new();
 {{cmap_values}}
 
         {{lexer_name}} {
+            input,
             cmap,
             cmap2,
-            start: chars.clone(),
-            current: chars.clone(),
+            start: input.char_indices(),
+            current: input.char_indices(),
 {{ previous_init }}
             max_len,
             zz_state: 0,
@@ -353,6 +361,8 @@ impl<'a> {{lexer_name}}<'a> {
             zz_marked_pos: 0,
             zz_current_pos: 0,
             zz_start_read: 0,
+            zz_start_read_char: 0,
+            zz_marked_char: 0,
 {{ zz_bol_init }}
             zz_at_eof: false,
 {{ fields_init }}
@@ -373,31 +383,34 @@ impl<'a> {{lexer_name}}<'a> {
     }
 
     pub fn yylength(&self) -> usize {
-        self.zz_marked_pos - self.zz_start_read
+        self.zz_marked_char - self.zz_start_read_char
     }
 
     pub fn yycharat(&self, pos: usize) -> Option<char> {
-        self.start.clone().nth(pos)
+        let mut ch: Option<char> = None;
+        let mut start = self.start.clone();
+        for _ in 0..(pos + 1) {
+            if let Some(c) = start.next() {
+                ch = Some(c.1);
+            } else {
+                return None;
+            }
+        }
+        ch
     }
 
     pub fn yytext(&self) -> String {
-        let len = self.zz_marked_pos - self.zz_start_read;
-        let mut text = String::with_capacity(len);
-        let mut chars = self.start.clone();
-
-        for _ in 0..len {
-            text.push(match chars.next() { Some(c) => c, _ => break,});
-        }
-        text
-    }
-
-    pub fn yypushback(&mut self, num: usize) {
-        if num <= self.yylength() {
-            self.zz_marked_pos -= num;
-        }
+        self.input[self.yybytepos()].to_string()
     }
 
     pub fn yytextpos(&self) -> std::ops::Range<usize> {
+        std::ops::Range {
+            start: self.zz_start_read_char,
+            end: self.zz_marked_char,
+        }
+    }
+
+    pub fn yybytepos(&self) -> std::ops::Range<usize> {
         std::ops::Range {
             start: self.zz_start_read,
             end: self.zz_marked_pos,
@@ -405,18 +418,26 @@ impl<'a> {{lexer_name}}<'a> {
     }
 
     pub fn yylex(&mut self) -> Result<{{result_type}}, Error> {
-        let mut zz_input: i32;
+        let mut zz_input: i32 = -1;
 
         // cached
         loop {
-            let mut zz_marked_pos_l = self.zz_marked_pos;
+            // char unit
+            let mut zz_marked_char_l = self.zz_marked_char;
+            let mut zz_current_char_pos_l = self.zz_marked_char;
+            self.zz_start_read_char = self.zz_marked_char;
+
+            // byte unit
+            let mut zz_marked_byte_pos_l = self.zz_marked_pos;
+            let mut zz_current_byte_pos_l = self.zz_marked_pos;
+
             let mut zz_action = -1;
-            let mut zz_current_pos_l = self.zz_marked_pos;
             let mut current = self.current.clone();
             {{ zz_bol_flag }}
 
             self.zz_start_read = self.zz_marked_pos;
             self.zz_current_pos = self.zz_marked_pos;
+            self.zz_start_read_char = self.zz_marked_char;
             self.start = self.current.clone();
 
 {{ zz_state_update }}
@@ -428,21 +449,21 @@ impl<'a> {{lexer_name}}<'a> {
             }
 
             'zz_for_action: loop {
-                if zz_current_pos_l < self.max_len {
+                if zz_current_char_pos_l < self.max_len {
                     {{ next_input }}
-                    zz_current_pos_l += 1;
+                    zz_current_char_pos_l += 1;
                 } else if self.zz_at_eof {
                     zz_input = {{lexer_name}}::YYEOF;
                     break 'zz_for_action;
                 } else {
-                    self.zz_current_pos = zz_current_pos_l;
+                    self.zz_current_pos = zz_current_byte_pos_l;
 
-                    if self.max_len <= zz_current_pos_l {
+                    if self.max_len <= zz_current_char_pos_l {
                         zz_input = {{lexer_name}}::YYEOF;
                         break 'zz_for_action;
                     } else {
                         {{ next_input }}
-                        zz_current_pos_l += 1;
+                        zz_current_char_pos_l += 1;
                     }
                 }
 
@@ -461,8 +482,10 @@ impl<'a> {{lexer_name}}<'a> {
                 let zz_attributes = {{lexer_name}}::ZZ_ATTR[self.zz_state];
                 if (zz_attributes & 1) == 1 {
                     zz_action = self.zz_state as i32;
-                    zz_marked_pos_l = zz_current_pos_l;
+                    zz_marked_char_l = zz_current_char_pos_l;
+                    zz_marked_byte_pos_l = zz_current_byte_pos_l;
                     self.current = current.clone();
+
                     if (zz_attributes & 8) == 8 {
                         break 'zz_for_action;
                     }
@@ -470,7 +493,8 @@ impl<'a> {{lexer_name}}<'a> {
             }   // loop 'zz_for_action
 
             // store back cached position
-            self.zz_marked_pos = zz_marked_pos_l;
+            self.zz_marked_char = zz_marked_char_l;
+            self.zz_marked_pos = zz_marked_byte_pos_l;
 
             if zz_input == {{lexer_name}}::YYEOF && self.zz_start_read == self.zz_current_pos {
                 self.zz_at_eof = true;
@@ -620,21 +644,21 @@ impl<'a> {{lexer_name}}<'a> {
         let zz_bol_def = "    zz_at_bol: bool,";
         let zz_bol_init = "            zz_at_bol: true,";
         let zz_bol_flag = r#"
-            if zz_marked_pos_l > self.zz_start_read {
+            if zz_marked_byte_pos_l > self.zz_start_read {
                 match self.previous {
                     '\n' | '\u{000B}' | '\u{000C}' | '\u{0085}' | '\u{2028}' | '\u{2029}' => {
                         self.zz_at_bol = true;
                     }
                     '\r' => {
-                        if zz_marked_pos_l < self.max_len {
-                            self.zz_at_bol = current.clone().next().unwrap() == '\n';
+                        if zz_marked_char_l < self.max_len {
+                            self.zz_at_bol = current.clone().next().unwrap().1 == '\n';
                         } else if self.zz_at_eof {
                             self.zz_at_bol = false;
                         } else {
                             if self.zz_at_eof {
                                 self.zz_at_bol = false;
                             } else {
-                                self.zz_at_bol = current.clone().next().unwrap() == '\n';
+                                self.zz_at_bol = current.clone().next().unwrap().1 == '\n';
                             }
                         }
                     }
@@ -663,9 +687,18 @@ impl<'a> {{lexer_name}}<'a> {
         );
         let copy_previous = "self.previous = zz_input;";
         let next_input = if self.bol_used {
-            "self.previous = current.next().unwrap(); zz_input = self.previous as i32;"
+            r#"
+                    if let Some(next) = current.next() {
+                        zz_current_byte_pos_l += next.1.len_utf8();
+                        self.previous = next.1;
+                        zz_input = self.previous as i32;
+                    }"#
         } else {
-            "zz_input = current.next().unwrap() as i32;"
+            r#"
+                if let Some(next) = current.next() {
+                    zz_current_byte_pos_l += next.1.len_utf8();
+                    zz_input = next.1 as i32;
+                }"#
         };
         globals.insert(
             "next_input".into(),
