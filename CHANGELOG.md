@@ -1,3 +1,8 @@
+## 0.8.1 (2024-01-26)
+
+* Suppress warnings
+* Remove unused variable definition in generated code
+
 ## 0.8.0 (2021-02-05)
 
 * Add yybytepos function to lexer ([#13](https://github.com/pfnet/rflex/issues/13))
