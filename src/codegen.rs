@@ -309,7 +309,9 @@ pub enum Error {
 pub struct {{lexer_name}}<'a> {
     input: &'a str,
     cmap: Vec<usize>,
+{% if use_cmap2 %}
     cmap2: HashMap<usize, usize>,
+{% endif %}
     start: CharIndices<'a>,
     current: CharIndices<'a>,
     max_len: usize,
@@ -345,13 +347,14 @@ impl<'a> {{lexer_name}}<'a> {
         let max_len = input.chars().clone().count();
         let mut cmap: Vec<usize> = Vec::with_capacity(256);
         cmap.resize(256, 0);
-        let mut cmap2: HashMap<usize, usize> = HashMap::new();
 {{cmap_values}}
 
         {{lexer_name}} {
             input,
             cmap,
+{% if use_cmap2 %}
             cmap2,
+{% endif %}
             start: input.char_indices(),
             current: input.char_indices(),
 {{ previous_init }}
@@ -370,22 +373,27 @@ impl<'a> {{lexer_name}}<'a> {
     }
 
 {{ fields_accessor }}
+    #[allow(dead_code)]
     pub fn is_eof(&self) -> bool {
         self.zz_at_eof
     }
 
+    #[allow(dead_code)]
     pub fn yybegin(&mut self, new_state: usize) {
         self.zz_lexical_state = new_state;
     }
 
+    #[allow(dead_code)]
     pub fn yystate(&self) -> usize {
         self.zz_lexical_state
     }
 
+    #[allow(dead_code)]
     pub fn yylength(&self) -> usize {
         self.zz_marked_char - self.zz_start_read_char
     }
 
+    #[allow(dead_code)]
     pub fn yycharat(&self, pos: usize) -> Option<char> {
         let mut ch: Option<char> = None;
         let mut start = self.start.clone();
@@ -399,10 +407,12 @@ impl<'a> {{lexer_name}}<'a> {
         ch
     }
 
+    #[allow(dead_code)]
     pub fn yytext(&self) -> String {
         self.input[self.yybytepos()].to_string()
     }
 
+    #[allow(dead_code)]
     pub fn yytextpos(&self) -> std::ops::Range<usize> {
         std::ops::Range {
             start: self.zz_start_read_char,
@@ -410,6 +420,7 @@ impl<'a> {{lexer_name}}<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn yybytepos(&self) -> std::ops::Range<usize> {
         std::ops::Range {
             start: self.zz_start_read,
@@ -417,6 +428,7 @@ impl<'a> {{lexer_name}}<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn yylex(&mut self) -> Result<{{result_type}}, Error> {
         let mut zz_input: i32 = -1;
 
@@ -470,7 +482,11 @@ impl<'a> {{lexer_name}}<'a> {
                 let cidx = if zz_input <= 0xFF {
                     self.cmap[zz_input as usize]
                 } else {
+{% if use_cmap2 %}
                     *self.cmap2.get(&(zz_input as usize)).unwrap_or(&0usize)
+{% else %}
+                    0usize
+{% endif %}
                 };
                 let idx = {{lexer_name}}::ZZ_ROW[self.zz_state] + cidx;
                 let zz_next = {{lexer_name}}::ZZ_TRANS[idx];
@@ -763,6 +779,7 @@ impl<'a> {{lexer_name}}<'a> {
 
         let col_map: Vec<i32> = self.emitter.get_col_map();
         let mut cmap_values = String::new();
+        let mut use_cmap2 = false;
         let intervals = self.char_classes.get_intervals();
         for interval in intervals {
             let class = interval.char_class;
@@ -774,10 +791,14 @@ impl<'a> {{lexer_name}}<'a> {
                 let s = if i <= 0xFF {
                     format!("        cmap[{}] = {};\n", i, col_map[class])
                 } else {
+                    use_cmap2 = true;
                     format!("        cmap2.insert({}, {});\n", i, col_map[class])
                 };
                 cmap_values.push_str(s.as_str());
             }
+        }
+        if use_cmap2 {
+            cmap_values.insert_str(0, "        let mut cmap2: HashMap<usize, usize> = HashMap::new();\n");
         }
 
         let mut i = self.emitter.action_table.len() + 1;
@@ -803,6 +824,10 @@ impl<'a> {{lexer_name}}<'a> {
         globals.insert(
             "action_list".into(),
             liquid::value::Value::scalar(action_list),
+        );
+        globals.insert(
+            "use_cmap2".into(),
+            liquid::value::Value::scalar(use_cmap2),
         );
         let output = template.render(&globals).unwrap();
         output
